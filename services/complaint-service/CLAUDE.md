@@ -22,7 +22,9 @@ php bin/console doctrine:migrations:migrate --no-interaction
 php bin/console doctrine:fixtures:load --no-interaction     # purges complaint_db, reloads demo data
 php bin/console doctrine:schema:validate
 php bin/console doctrine:migrations:diff                    # after changing an entity
-php -S 0.0.0.0:8106 -t public
+composer serve                                               # symfony server:start --port=8106 --no-tls --allow-all-ip (composer serve:php = php -S 0.0.0.0:8106)
+composer eureka                                              # app:eureka:run: register RENTAL-COMPLAINT, heartbeat every 30 s, Ctrl+C deregisters
+php bin/console app:eureka:deregister                        # remove a stale instance (runner killed without Ctrl+C)
 composer test                                                # recreate complaint_db_test + migrations + fixtures, then the whole suite
 composer test:db                                             # only recreate the test database
 php bin/phpunit --filter ChangeStatusTest                    # single class/test (after composer test:db)
@@ -80,7 +82,8 @@ On Windows, send JSON bodies containing accents from a file (`--data-binary @fil
 ## Integration with other services
 
 - Ownership checks call `GET /internal/reservations/{id}` (RENTAL-RESERVATION) and `GET /internal/contracts/{id}` (RENTAL-CONTRACT): not found → 404, belongs to another user → 403. Peer/Eureka down → 503, unreadable response → 502. This goes through the interfaces `App\Integration\ReservationLookup` / `ContractLookup` (return `null` when not found). Their only implementations for now are `App\Integration\Demo\Demo*Lookup` (built from `DemoIds`, autowired automatically). The Eureka + HTTP version will replace them without changing `ComplaintService`.
-- Service discovery uses the shared client in `../../shared/php-eureka` (namespace `Rental\Eureka`, wired through `composer.json` PSR-4 autoload, not a package). Registration runs as the long-lived console command `app:eureka:run` next to the web server. Internal calls carry a client-credentials token from Keycloak client `complaint-service` (role INTERNAL).
+- Service discovery uses the shared client in `../../shared/php-eureka` (namespace `Rental\Eureka`, wired through `composer.json` PSR-4 autoload, not a package). `Rental\Eureka\EurekaClient` is a service configured in `config/services.yaml`; the env vars have defaults there. Registration runs as the long-lived command `app:eureka:run` (`src/Command/EurekaRunCommand.php`) next to the web server. It does not use the shared `EurekaRunner`, which loops forever with no stop hook. Its own loop does the same thing, with 1 s ticks, and deregisters on Ctrl+C / CTRL_BREAK (`sapi_windows_set_ctrl_handler`) or SIGINT / SIGTERM (pcntl). Eureka runs with self-preservation on, so an instance killed without deregistering can linger.
+- The server must listen on all interfaces (`composer serve`): the Gateway container reaches the host through `host.docker.internal`. Expect a few seconds of 500s from the Gateway after the service stops, until its instance cache refreshes; after that it returns 503. Internal calls carry a client-credentials token from Keycloak client `complaint-service` (role INTERNAL).
 - Auth: Keycloak realm `location-voitures`, roles in the top-level `roles` claim. CLIENT sees and creates only its own complaints; AGENT and ADMIN process them. `/internal/**` is never exposed through the Gateway. `GET /health` → `{"status":"UP"}`.
 
 ## Demo data

@@ -36,7 +36,8 @@
     },
     "autoload": {
         "psr-4": {
-            "App\\": "src/"
+            "App\\": "src/",
+            "Rental\\Eureka\\": "../../shared/php-eureka/src/"
         }
     },
     "autoload-dev": {
@@ -75,12 +76,27 @@
         "test": [
             "@test:db",
             "@php bin/phpunit"
+        ],
+        "serve": [
+            "Composer\\Config::disableProcessTimeout",
+            "symfony server:start --port=8106 --no-tls --allow-all-ip"
+        ],
+        "serve:php": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -S 0.0.0.0:8106 -t public"
+        ],
+        "eureka": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php bin/console app:eureka:run"
         ]
     },
     "scripts-descriptions": {
         "openapi:dump": "Régénère docs/openapi/complaint-service.yaml (UTF-8 sans BOM, LF)",
         "test:db": "Recrée complaint_db_test (migrations) et charge les fixtures",
-        "test": "Recrée la base de test, charge les fixtures et lance toute la suite PHPUnit"
+        "test": "Recrée la base de test, charge les fixtures et lance toute la suite PHPUnit",
+        "serve": "Lance le service sur le port 8106, toutes interfaces (Symfony CLI)",
+        "serve:php": "Comme serve, avec le serveur intégré de PHP (sans Symfony CLI)",
+        "eureka": "Enregistre RENTAL-COMPLAINT dans Eureka et envoie les battements (Ctrl+C pour se retirer)"
     },
     "conflict": {
         "symfony/symfony": "*"

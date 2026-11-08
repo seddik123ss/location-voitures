@@ -4,6 +4,30 @@ Réclamations des clients : Symfony 7.4, PHP 8.5, MySQL `complaint_db`, port 810
 
 > README en cours : il sera complété à l'étape README (lancement, configuration, Eureka, Docker).
 
+## Lancer le service
+
+L'infrastructure doit tourner (`docker compose up -d` dans `infra/`). Ouvrez deux terminaux dans `services/complaint-service` :
+
+```
+composer serve      # serveur web sur le port 8106, toutes les interfaces
+composer eureka     # enregistrement RENTAL-COMPLAINT dans Eureka, battement toutes les 30 s
+```
+
+`composer serve` lance `symfony server:start --port=8106 --no-tls --allow-all-ip`. Sans Symfony CLI, utilisez
+`composer serve:php` (`php -S 0.0.0.0:8106 -t public`).
+
+**Écoute réseau.** La Gateway tourne dans Docker et joint le service via `host.docker.internal`, qui n'arrive pas sur `127.0.0.1` :
+le serveur doit écouter sur toutes les interfaces, ce que font les deux commandes. Si le pare-feu Windows demande une autorisation
+au premier lancement, **acceptez pour les réseaux privés**.
+
+**Eureka.** Le service s'annonce sous `host.docker.internal:8106` (`SERVICE_HOST`, `SERVICE_PORT`, `EUREKA_URL`), visible sur
+http://localhost:8761. Arrêtez `composer eureka` avec **Ctrl+C** : la commande se retire d'Eureka avant de quitter, et la Gateway
+cesse aussitôt de router vers le service (503). Si le terminal a été fermé sans Ctrl+C, retirez l'instance avec
+`php bin/console app:eureka:deregister` ; sinon l'auto-préservation d'Eureka peut la garder affichée.
+
+Vérification via la Gateway (http://localhost:8088) : `GET /api/complaints` sans token donne 401 (Gateway). Avec un token Keycloak
+**et**, tant que l'étape Sécurité n'est pas faite, les en-têtes `X-Dev-User-Id` / `X-Dev-Roles`, on obtient 200.
+
 ## Documentation de l'API
 
 - Swagger UI : http://localhost:8106/api/doc, JSON : http://localhost:8106/api/doc.json (sans authentification).
