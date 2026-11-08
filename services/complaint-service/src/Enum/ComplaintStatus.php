@@ -13,8 +13,7 @@ enum ComplaintStatus: string
      * Transitions autorisées :
      * OPEN -> IN_PROGRESS | REJECTED
      * IN_PROGRESS -> RESOLVED | REJECTED | OPEN
-     * RESOLVED -> OPEN (réouverture)
-     * REJECTED : état final.
+     * RESOLVED et REJECTED : états finaux (toute transition -> 409).
      *
      * @return list<self>
      */
@@ -23,9 +22,13 @@ enum ComplaintStatus: string
         return match ($this) {
             self::OPEN => [self::IN_PROGRESS, self::REJECTED],
             self::IN_PROGRESS => [self::RESOLVED, self::REJECTED, self::OPEN],
-            self::RESOLVED => [self::OPEN],
-            self::REJECTED => [],
+            self::RESOLVED, self::REJECTED => [],
         };
+    }
+
+    public function isFinal(): bool
+    {
+        return $this->allowedTransitions() === [];
     }
 
     public function canTransitionTo(self $target): bool
