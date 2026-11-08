@@ -1,9 +1,199 @@
 nelmio_api_doc:
     documentation:
         info:
-            title: My App
-            description: This is an awesome app!
+            title: complaint-service
             version: 1.0.0
-    areas: # to filter documented areas
+            description: |
+                Réclamations des clients de la plateforme de location de voitures (RENTAL-COMPLAINT, port 8106).
+
+                **Rôles** (claim `roles` du token Keycloak, realm `location-voitures`) :
+                - `CLIENT` : crée, consulte, modifie (tant que OPEN) et supprime (tant que OPEN) ses propres réclamations, écrit des messages ;
+                - `AGENT` : consulte toutes les réclamations, change leur statut et leur priorité, écrit des messages ;
+                - `ADMIN` : comme AGENT, et peut supprimer n'importe quelle réclamation.
+
+                **Statuts** : OPEN → IN_PROGRESS | REJECTED ; IN_PROGRESS → RESOLVED | REJECTED | OPEN ;
+                RESOLVED et REJECTED sont des états finaux (toute transition, tout message, tout changement de priorité → 409).
+
+                **Ordre des contrôles** : le corps JSON est validé avant d'entrer dans le contrôleur. Un corps invalide renvoie donc
+                **400 même si la réclamation n'existe pas** ; ensuite viennent 404 (réclamation introuvable), 403 (droits), puis 409 / 422 (règles métier).
+
+                **Formats** (docs/conventions.md) : UUID v4 en chaîne, JSON en camelCase, instants ISO 8601 UTC,
+                pagination `?page=0&size=20` → `{items, page, size, total}`, erreurs `{status, error, message, details}`.
+
+                **Authentification** : `Authorization: Bearer <JWT Keycloak>`. En environnement **dev uniquement**,
+                les en-têtes `X-Dev-User-Id` et `X-Dev-Roles` remplacent le token (bouton Authorize → devUserId et devRoles).
+        servers:
+            - { url: 'http://localhost:8106', description: 'Accès direct au service (dev, utilisé par Swagger UI)' }
+            - { url: 'http://localhost:8088', description: 'Via la Gateway' }
+        tags:
+            - { name: Réclamations, description: 'Réclamations, statut, priorité et messages' }
+            - { name: Santé, description: 'Supervision' }
+        security:
+            - bearerAuth: []
+            - { devUserId: [], devRoles: [] }
+        components:
+            securitySchemes:
+                bearerAuth:
+                    type: http
+                    scheme: bearer
+                    bearerFormat: JWT
+                    description: 'Token Keycloak (realm location-voitures). Les rôles sont lus dans la claim `roles`.'
+                devUserId:
+                    type: apiKey
+                    in: header
+                    name: X-Dev-User-Id
+                    description: 'RÉSERVÉ AU DÉVELOPPEMENT (APP_ENV=dev). UUID de l''appelant, ex. client2 : 611f32de-ce7b-4927-b1c4-d113b6479d59.'
+                devRoles:
+                    type: apiKey
+                    in: header
+                    name: X-Dev-Roles
+                    description: 'RÉSERVÉ AU DÉVELOPPEMENT (APP_ENV=dev). Rôles séparés par des virgules : CLIENT, AGENT, ADMIN (CLIENT par défaut).'
+            schemas:
+                Error:
+                    type: object
+                    description: 'Format d''erreur commun (docs/conventions.md).'
+                    required: [status, error, message]
+                    properties:
+                        status: { type: integer, example: 409 }
+                        error: { type: string, example: CONFLICT }
+                        message: { type: string, example: 'Transition de statut interdite : RESOLVED -> OPEN' }
+                        details:
+                            type: array
+                            description: 'Présent quand l''erreur porte sur des champs précis.'
+                            items:
+                                type: object
+                                required: [field, message]
+                                properties:
+                                    field: { type: string, example: status }
+                                    message: { type: string, example: 'Transitions possibles depuis RESOLVED : aucune (état final)' }
+                Page:
+                    type: object
+                    description: 'Liste paginée commune. `page` commence à 0.'
+                    required: [items, page, size, total]
+                    properties:
+                        items: { type: array, items: {} }
+                        page: { type: integer, minimum: 0, example: 0 }
+                        size: { type: integer, minimum: 1, maximum: 100, example: 20 }
+                        total: { type: integer, minimum: 0, example: 3 }
+                ComplaintSummary:
+                    type: object
+                    description: 'Réclamation sans messages ni historique (éléments de liste).'
+                    required: [id, userId, reservationId, contractId, category, priority, status, subject, description, createdAt, updatedAt]
+                    properties:
+                        id: { type: string, format: uuid, example: b15d796a-8360-46da-a5e1-f9c580aac77f }
+                        userId: { type: string, format: uuid, description: 'Client auteur (sub Keycloak).', example: 611f32de-ce7b-4927-b1c4-d113b6479d59 }
+                        reservationId: { type: string, format: uuid, nullable: true, example: 30eeff32-a413-42fb-9845-8ede4b7f98e0 }
+                        contractId: { type: string, format: uuid, nullable: true, example: null }
+                        category: { type: string, enum: [BILLING, VEHICLE, SERVICE, DAMAGE_DISPUTE], example: BILLING }
+                        priority: { type: string, enum: [LOW, MEDIUM, HIGH], example: MEDIUM }
+                        status: { type: string, enum: [OPEN, IN_PROGRESS, RESOLVED, REJECTED], example: OPEN }
+                        subject: { type: string, maxLength: 150, example: 'Montant facturé supérieur au devis' }
+                        description: { type: string, maxLength: 5000, example: 'La réservation du 1er au 5 octobre était annoncée à 640.000 TND, mais un supplément apparaît sur mon relevé.' }
+                        createdAt: { type: string, format: date-time, example: '2026-10-06T09:15:00Z' }
+                        updatedAt: { type: string, format: date-time, example: '2026-10-06T09:20:00Z' }
+                ComplaintDetail:
+                    description: 'Réclamation complète : transitions encore possibles, messages et historique des statuts.'
+                    allOf:
+                        - $ref: '#/components/schemas/ComplaintSummary'
+                        - type: object
+                          required: [allowedTransitions, messages, statusHistory]
+                          properties:
+                              allowedTransitions:
+                                  type: array
+                                  description: 'Statuts accessibles depuis le statut actuel (vide pour un état final).'
+                                  items: { type: string, enum: [OPEN, IN_PROGRESS, RESOLVED, REJECTED] }
+                                  example: [IN_PROGRESS, REJECTED]
+                              messages:
+                                  type: array
+                                  description: 'Du plus ancien au plus récent.'
+                                  items: { $ref: '#/components/schemas/ComplaintMessage' }
+                              statusHistory:
+                                  type: array
+                                  description: 'Du plus ancien au plus récent ; la première entrée est la création (fromStatus null).'
+                                  items: { $ref: '#/components/schemas/StatusHistoryEntry' }
+                ComplaintMessage:
+                    type: object
+                    required: [id, complaintId, authorId, authorRole, content, createdAt]
+                    properties:
+                        id: { type: string, format: uuid, example: 11ea0e66-28ca-45d1-b4f5-b2af690d8650 }
+                        complaintId: { type: string, format: uuid, example: b15d796a-8360-46da-a5e1-f9c580aac77f }
+                        authorId: { type: string, format: uuid, example: 11c9b774-201e-4a8c-be43-6b084b52f4c7 }
+                        authorRole: { type: string, enum: [CLIENT, AGENT, ADMIN], example: AGENT }
+                        content: { type: string, maxLength: 2000, example: 'Nous avons retrouvé le supplément : frais de péage. Remboursement en cours.' }
+                        createdAt: { type: string, format: date-time, example: '2026-11-08T22:08:56Z' }
+                StatusHistoryEntry:
+                    type: object
+                    required: [id, fromStatus, toStatus, changedBy, changedByRole, comment, changedAt]
+                    properties:
+                        id: { type: string, format: uuid, example: 8e0b7793-4780-4e29-b9d3-d7260f3378cb }
+                        fromStatus: { type: string, nullable: true, enum: [OPEN, IN_PROGRESS, RESOLVED, REJECTED], example: OPEN }
+                        toStatus: { type: string, enum: [OPEN, IN_PROGRESS, RESOLVED, REJECTED], example: IN_PROGRESS }
+                        changedBy: { type: string, format: uuid, example: 11c9b774-201e-4a8c-be43-6b084b52f4c7 }
+                        changedByRole: { type: string, enum: [CLIENT, AGENT, ADMIN], example: AGENT }
+                        comment: { type: string, nullable: true, example: 'Vérification auprès de la facturation' }
+                        changedAt: { type: string, format: date-time, example: '2026-11-08T22:08:47Z' }
+                ComplaintPage:
+                    allOf:
+                        - $ref: '#/components/schemas/Page'
+                        - type: object
+                          properties:
+                              items:
+                                  type: array
+                                  items: { $ref: '#/components/schemas/ComplaintSummary' }
+                Health:
+                    type: object
+                    required: [status]
+                    properties:
+                        status: { type: string, example: UP }
+            responses:
+                BadRequest:
+                    description: 'Requête invalide : JSON mal formé, champ manquant ou invalide, paramètre de requête invalide (un détail par champ).'
+                    content:
+                        application/json:
+                            schema: { $ref: '#/components/schemas/Error' }
+                            examples:
+                                validation:
+                                    summary: 'Champs invalides'
+                                    value: { status: 400, error: BAD_REQUEST, message: 'Requête invalide', details: [ { field: category, message: 'Valeur invalide, valeurs possibles : "BILLING", "VEHICLE", "SERVICE", "DAMAGE_DISPUTE"' }, { field: description, message: 'Champ obligatoire' } ] }
+                                json:
+                                    summary: 'JSON mal formé ou corps vide'
+                                    value: { status: 400, error: BAD_REQUEST, message: 'Corps JSON invalide' }
+                Unauthorized:
+                    description: 'Token absent ou invalide.'
+                    headers:
+                        WWW-Authenticate: { schema: { type: string, example: Bearer } }
+                    content:
+                        application/json:
+                            schema: { $ref: '#/components/schemas/Error' }
+                            example: { status: 401, error: UNAUTHORIZED, message: 'Authentification requise' }
+                Forbidden:
+                    description: 'Rôle insuffisant ou ressource d''un autre client.'
+                    content:
+                        application/json:
+                            schema: { $ref: '#/components/schemas/Error' }
+                            example: { status: 403, error: FORBIDDEN, message: 'Cette réclamation appartient à un autre client' }
+                NotFound:
+                    description: 'Réclamation introuvable.'
+                    content:
+                        application/json:
+                            schema: { $ref: '#/components/schemas/Error' }
+                            example: { status: 404, error: NOT_FOUND, message: 'Réclamation introuvable' }
+                Conflict:
+                    description: 'Action incompatible avec le statut actuel de la réclamation.'
+                    content:
+                        application/json:
+                            schema: { $ref: '#/components/schemas/Error' }
+                            example: { status: 409, error: CONFLICT, message: 'Réclamation clôturée (RESOLVED) : ajout de message impossible' }
+                UnsupportedMediaType:
+                    description: 'Content-Type différent de application/json.'
+                    content:
+                        application/json:
+                            schema: { $ref: '#/components/schemas/Error' }
+                            example: { status: 415, error: UNSUPPORTED_MEDIA_TYPE, message: 'Content-Type attendu : application/json' }
+    # Swagger UI servi depuis public/bundles (assets:install, lancé par composer install) plutôt que depuis un CDN non versionné.
+    html_config:
+        assets_mode: bundle
+    areas:
         path_patterns:
-            - ^/api(?!/doc$) # Accepts routes under /api except /api/doc
+            - ^/api(?!/doc)
+            - ^/health$

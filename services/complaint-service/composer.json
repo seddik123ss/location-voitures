@@ -64,7 +64,11 @@
         ],
         "post-update-cmd": [
             "@auto-scripts"
-        ]
+        ],
+        "openapi:dump": "@php bin/openapi-dump.php"
+    },
+    "scripts-descriptions": {
+        "openapi:dump": "Régénère docs/openapi/complaint-service.yaml (UTF-8 sans BOM, LF)"
     },
     "conflict": {
         "symfony/symfony": "*"

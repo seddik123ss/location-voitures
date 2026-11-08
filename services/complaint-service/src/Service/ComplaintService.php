@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Dto\AddMessageRequest;
+use App\Dto\ChangePriorityRequest;
 use App\Dto\ChangeStatusRequest;
 use App\Dto\ComplaintFilter;
 use App\Dto\CreateComplaintRequest;
@@ -115,6 +116,15 @@ final class ComplaintService
     {
         $comment = is_string($request->comment) && trim($request->comment) !== '' ? trim($request->comment) : null;
         $complaint->changeStatus(ComplaintStatus::from((string) $request->status), $user->getId(), $user->authorRole(), $comment);
+        $this->em->flush();
+    }
+
+    public function changePriority(Complaint $complaint, ChangePriorityRequest $request): void
+    {
+        if ($complaint->getStatus()->isFinal()) {
+            throw ApiException::conflict(sprintf('Réclamation clôturée (%s) : changement de priorité impossible', $complaint->getStatus()->value));
+        }
+        $complaint->changePriority(ComplaintPriority::from((string) $request->priority));
         $this->em->flush();
     }
 

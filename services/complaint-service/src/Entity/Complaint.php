@@ -123,6 +123,13 @@ class Complaint
         return $message;
     }
 
+    /** Changement de priorité par AGENT / ADMIN : pas tracé dans l'historique des statuts. */
+    public function changePriority(ComplaintPriority $priority): void
+    {
+        $this->priority = $priority;
+        $this->updatedAt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+    }
+
     public function update(?string $subject = null, ?string $description = null, ?ComplaintCategory $category = null, ?ComplaintPriority $priority = null): void
     {
         $this->subject = $subject ?? $this->subject;

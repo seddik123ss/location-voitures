@@ -29,6 +29,8 @@ php bin/phpunit --filter testName                            # single test
 
 PHPUnit fails on deprecations, notices and warnings (`phpunit.dist.xml`).
 
+API docs: Swagger UI at http://localhost:8106/api/doc, JSON at `/api/doc.json` (both public). After changing a route, a DTO or `config/packages/nelmio_api_doc.yaml`, regenerate the shared contract with `composer openapi:dump`, which writes `../../docs/openapi/complaint-service.yaml` in UTF-8 without BOM, with LF. Never use `nelmio:apidoc:dump > file` in PowerShell 5.1, because it writes UTF-16.
+
 Inspect the database: `docker exec location-voitures-mysql-1 mysql -ucomplaint_svc -pcomplaint_pwd complaint_db -e "SELECT ..."`
 
 PowerShell 5.1 mangles double quotes inside native-command arguments, so `php -r '... "x" ...'` breaks; put throwaway PHP in a script file instead.
@@ -43,12 +45,20 @@ The root `.gitignore` ignores `.env`, so this service versions `.env.dist` (Symf
 - A complaint references a reservation and/or a contract (`reservationId`, `contractId`) from other services by UUID only; there are no foreign keys across services.
 - IDs (own and foreign) are UUID v4 strings stored as `CHAR(36)` (Doctrine `guid`), generated with `symfony/uid`. The constructor accepts a fixed `id` so fixtures can reuse the UUIDs from `docs/demo-ids.md`. Timestamps are `DateTimeImmutable` in UTC.
 - Enums in `src/Enum/` (backed strings, mapped with `enumType`): `ComplaintCategory`, `ComplaintPriority`, `ComplaintStatus`, `AuthorRole`.
-- **Status matrix** (team rule, in `ComplaintStatus::allowedTransitions()`): OPEN → IN_PROGRESS | REJECTED; IN_PROGRESS → RESOLVED | REJECTED | OPEN; RESOLVED and REJECTED are final. A forbidden transition throws `App\Exception\InvalidStatusTransition`, which must map to **409**. The constructor writes the first history entry (`null` → OPEN).
+- **Status matrix** (team rule, in `ComplaintStatus::allowedTransitions()`): OPEN → IN_PROGRESS | REJECTED; IN_PROGRESS → RESOLVED | REJECTED | OPEN; RESOLVED and REJECTED are final. A forbidden transition throws `App\Exception\InvalidStatusTransition`, which must map to **409**. The constructor writes the first history entry (`null` → OPEN). In a final state, adding a message or changing the priority is also a 409.
+- Priority: optional at creation (default MEDIUM), changed only by AGENT/ADMIN through `PATCH /{id}/priority`. It updates `updatedAt` but is not recorded in the status history.
 
 ## HTTP layer
 
 - Request flow: `ComplaintController` (thin) → `ComplaintService::get()` (404) → `denyAccessUnlessGranted()` with `ComplaintVoter` (403, "who") → `ComplaintService` (409 state rules, 422 business rules, 404/403 reservation or contract ownership). JSON is built by hand in `ComplaintPresenter`, not with the serializer.
-- Request bodies are DTOs in `src/Dto/` bound with `#[MapRequestPayload(validationFailedStatusCode: 400)]`. Properties are `mixed` + `Assert\Type`, so a type error doesn't stop the other fields from being validated. Enum fields are strings checked with `Assert\Choice(callback: [Enum::class, 'values'])`. Query parameters are parsed by `ComplaintFilter::fromRequest()`.
+- Request bodies are DTOs in `src/Dto/` bound with `#[MapRequestPayload(validationFailedStatusCode: 400)]`, so body validation (400) runs before the controller, and therefore before the 404. This order is documented in Swagger. DTO conventions:
+  - Properties are public `mixed` + `Assert\Type`, so a type error doesn't stop the other fields from being validated.
+  - A required field has **no default value**: the validator reads an uninitialized property as null, so `NotBlank` gives 400, and Nelmio marks the field `required`. An optional field defaults to `null`.
+  - Enum fields are strings checked with `Assert\Choice(callback: [Enum::class, 'values'])`; Nelmio turns that into `enum`.
+  - Text fields use `NotBlank(normalizer: [Normalize::class, 'trim'])`.
+  - Each property carries an `#[OA\Property]` (type, example). Nelmio generates the request-body schemas from the DTOs.
+- Query parameters are parsed by `ComplaintFilter::fromRequest()`.
+- OpenAPI: response schemas (`ComplaintSummary`, `ComplaintDetail`, `ComplaintPage`, `Error`...), shared error responses (`#/components/responses/NotFound`...) and the security schemes (`bearerAuth`, plus `devUserId` / `devRoles` for dev) live in `config/packages/nelmio_api_doc.yaml`. Operations are described with `#[OA\Get]`, `#[OA\Post]`... on the controller methods. Swagger UI assets are served locally (`html_config.assets_mode: bundle`).
 - Every error goes through `App\EventListener\ApiExceptionListener` → `ApiResponse::error()`. Throw `App\Exception\ApiException` (factories `notFound`, `forbidden`, `conflict`, `unprocessable`, `badGateway`, `serviceUnavailable`), never build an error response in a controller.
 - Responses use `ApiResponse::json()` (unescaped UTF-8). Instants are formatted `Y-m-d\TH:i:s\Z`, and `Kernel::boot()` forces the UTC timezone.
 - Caller = `App\Security\ApiUser` (id + realm roles), injected with `#[CurrentUser]`. In dev it comes from `DevHeaderAuthenticator` (headers `X-Dev-User-Id: <uuid>`, `X-Dev-Roles: CLIENT|AGENT|ADMIN`), registered only under `when@dev` in `security.yaml`. In other environments there is no authenticator yet, so `/api/**` returns 401 until the JWT authenticator replaces it.
