@@ -1,0 +1,13 @@
+CREATE DATABASE user_db;
+CREATE USER 'user_svc'@'%' IDENTIFIED BY 'user_pwd';
+GRANT ALL PRIVILEGES ON user_db.* TO 'user_svc'@'%';
+CREATE DATABASE vehicle_db;
+CREATE USER 'vehicle_svc'@'%' IDENTIFIED BY 'vehicle_pwd';
+GRANT ALL PRIVILEGES ON vehicle_db.* TO 'vehicle_svc'@'%';
+CREATE DATABASE reservation_db;
+CREATE USER 'reservation_svc'@'%' IDENTIFIED BY 'reservation_pwd';
+GRANT ALL PRIVILEGES ON reservation_db.* TO 'reservation_svc'@'%';
+CREATE DATABASE complaint_db;
+CREATE USER 'complaint_svc'@'%' IDENTIFIED BY 'complaint_pwd';
+GRANT ALL PRIVILEGES ON complaint_db.* TO 'complaint_svc'@'%';
+FLUSH PRIVILEGES;
