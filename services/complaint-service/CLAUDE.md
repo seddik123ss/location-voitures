@@ -45,9 +45,23 @@ The root `.gitignore` ignores `.env`, so this service versions `.env.dist` (Symf
 - Enums in `src/Enum/` (backed strings, mapped with `enumType`): `ComplaintCategory`, `ComplaintPriority`, `ComplaintStatus`, `AuthorRole`.
 - **Status matrix** (team rule, in `ComplaintStatus::allowedTransitions()`): OPEN → IN_PROGRESS | REJECTED; IN_PROGRESS → RESOLVED | REJECTED | OPEN; RESOLVED and REJECTED are final. A forbidden transition throws `App\Exception\InvalidStatusTransition`, which must map to **409**. The constructor writes the first history entry (`null` → OPEN).
 
+## HTTP layer
+
+- Request flow: `ComplaintController` (thin) → `ComplaintService::get()` (404) → `denyAccessUnlessGranted()` with `ComplaintVoter` (403, "who") → `ComplaintService` (409 state rules, 422 business rules, 404/403 reservation or contract ownership). JSON is built by hand in `ComplaintPresenter`, not with the serializer.
+- Request bodies are DTOs in `src/Dto/` bound with `#[MapRequestPayload(validationFailedStatusCode: 400)]`. Properties are `mixed` + `Assert\Type`, so a type error doesn't stop the other fields from being validated. Enum fields are strings checked with `Assert\Choice(callback: [Enum::class, 'values'])`. Query parameters are parsed by `ComplaintFilter::fromRequest()`.
+- Every error goes through `App\EventListener\ApiExceptionListener` → `ApiResponse::error()`. Throw `App\Exception\ApiException` (factories `notFound`, `forbidden`, `conflict`, `unprocessable`, `badGateway`, `serviceUnavailable`), never build an error response in a controller.
+- Responses use `ApiResponse::json()` (unescaped UTF-8). Instants are formatted `Y-m-d\TH:i:s\Z`, and `Kernel::boot()` forces the UTC timezone.
+- Caller = `App\Security\ApiUser` (id + realm roles), injected with `#[CurrentUser]`. In dev it comes from `DevHeaderAuthenticator` (headers `X-Dev-User-Id: <uuid>`, `X-Dev-Roles: CLIENT|AGENT|ADMIN`), registered only under `when@dev` in `security.yaml`. In other environments there is no authenticator yet, so `/api/**` returns 401 until the JWT authenticator replaces it.
+
+Example (Git Bash; PowerShell's `curl` is an alias for `Invoke-WebRequest`):
+```
+curl -s http://127.0.0.1:8106/api/complaints -H "X-Dev-User-Id: 611f32de-ce7b-4927-b1c4-d113b6479d59" -H "X-Dev-Roles: CLIENT"
+```
+On Windows, send JSON bodies containing accents from a file (`--data-binary @file.json`): `curl.exe` arguments are not passed as UTF-8.
+
 ## Integration with other services
 
-- Ownership checks call `GET /internal/reservations/{id}` (RENTAL-RESERVATION) and `GET /internal/contracts/{id}` (RENTAL-CONTRACT): not found → 404, belongs to another user → 403. Peer/Eureka down → 503, unreadable response → 502. Until those services exist, the calls are simulated using the demo data.
+- Ownership checks call `GET /internal/reservations/{id}` (RENTAL-RESERVATION) and `GET /internal/contracts/{id}` (RENTAL-CONTRACT): not found → 404, belongs to another user → 403. Peer/Eureka down → 503, unreadable response → 502. This goes through the interfaces `App\Integration\ReservationLookup` / `ContractLookup` (return `null` when not found). Their only implementations for now are `App\Integration\Demo\Demo*Lookup` (built from `DemoIds`, autowired automatically). The Eureka + HTTP version will replace them without changing `ComplaintService`.
 - Service discovery uses the shared client in `../../shared/php-eureka` (namespace `Rental\Eureka`, wired through `composer.json` PSR-4 autoload, not a package). Registration runs as the long-lived console command `app:eureka:run` next to the web server. Internal calls carry a client-credentials token from Keycloak client `complaint-service` (role INTERNAL).
 - Auth: Keycloak realm `location-voitures`, roles in the top-level `roles` claim. CLIENT sees and creates only its own complaints; AGENT and ADMIN process them. `/internal/**` is never exposed through the Gateway. `GET /health` → `{"status":"UP"}`.
 

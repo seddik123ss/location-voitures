@@ -1,0 +1,31 @@
+security:
+    providers:
+        # Les utilisateurs viennent du token (ApiUser construit par l'authenticator), pas d'une base.
+        users_in_memory: { memory: null }
+
+    firewalls:
+        dev:
+            pattern: ^/(_profiler(/|$)|(_wdt|assets|build)/)
+            security: false
+        main:
+            stateless: true
+            provider: users_in_memory
+            entry_point: App\Security\JsonAuthenticationEntryPoint
+
+    # Seule la première règle correspondante s'applique.
+    access_control:
+        - { path: ^/health$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/doc, roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: IS_AUTHENTICATED }
+
+# Appelant provisoire (en-têtes X-Dev-User-Id / X-Dev-Roles) : environnement dev seulement.
+# À l'étape Sécurité, remplacé par l'authenticator JWT Keycloak.
+when@dev:
+    security:
+        firewalls:
+            main:
+                stateless: true
+                provider: users_in_memory
+                entry_point: App\Security\JsonAuthenticationEntryPoint
+                custom_authenticators:
+                    - App\Security\DevHeaderAuthenticator
