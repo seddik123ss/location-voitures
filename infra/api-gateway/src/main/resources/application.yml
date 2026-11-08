@@ -1,0 +1,50 @@
+server:
+  port: 8088
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "http://localhost:4200"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+      routes:
+        - id: users
+          uri: lb://RENTAL-USER
+          predicates: [ "Path=/api/users/**,/api/licenses/**" ]
+        - id: vehicles
+          uri: lb://RENTAL-VEHICLE
+          predicates: [ "Path=/api/vehicles/**,/api/categories/**,/api/agencies/**" ]
+        - id: reservations
+          uri: lb://RENTAL-RESERVATION
+          predicates: [ "Path=/api/reservations/**" ]
+        - id: payments
+          uri: lb://RENTAL-PAYMENT
+          predicates: [ "Path=/api/payments/**,/api/invoices/**" ]
+        - id: contracts
+          uri: lb://RENTAL-CONTRACT
+          predicates: [ "Path=/api/contracts/**,/api/inspections/**" ]
+        - id: complaints
+          uri: lb://RENTAL-COMPLAINT
+          predicates: [ "Path=/api/complaints/**" ]
+        - id: ml
+          uri: lb://RENTAL-ML
+          predicates: [ "Path=/api/ml/**" ]
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/location-voitures}
+          jwk-set-uri: ${KEYCLOAK_JWKS:http://localhost:8180/realms/location-voitures/protocol/openid-connect/certs}
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
