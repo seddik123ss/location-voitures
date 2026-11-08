@@ -133,13 +133,28 @@ LOGGING = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "payment-service",
-    "DESCRIPTION": "Payments and invoices for the car rental platform (RENTAL-PAYMENT).",
-    "VERSION": "0.1.0",
+    "DESCRIPTION": (
+        "Paiements et factures de la plateforme de location de voitures (Eureka : RENTAL-PAYMENT, port 8104).\n\n"
+        "- Routes publiques `/api/payments/**`, `/api/invoices/**` : via la Gateway (8088), token Keycloak.\n"
+        "- Route interne `/internal/payments` : jamais exposée par la Gateway, rôle INTERNAL.\n"
+        "- Erreurs au format commun `{status, error, message, details}` ; JSON camelCase ; montants en TND (3 décimales)."
+    ),
+    "VERSION": "1.0.0",
+    "SERVERS": [
+        {"url": "http://localhost:8088", "description": "via la Gateway (routes /api)"},
+        {"url": "http://localhost:8104", "description": "accès direct au service (développement, routes /internal)"},
+    ],
+    "TAGS": [
+        {"name": "Paiements", "description": "Paiements de location, caution, frais et remboursements"},
+        {"name": "Factures", "description": "Factures générées automatiquement (lecture seule)"},
+        {"name": "Interne", "description": "Routes entre services (rôle INTERNAL)"},
+    ],
     "SERVE_INCLUDE_SCHEMA": False,
     "CAMELIZE_NAMES": True,
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
         "drf_spectacular.contrib.djangorestframework_camel_case.camelize_serializer_fields",
+        "payments.schema.publish_with_bearer_auth",
     ],
     "COMPONENT_SPLIT_REQUEST": True,
     "ENUM_NAME_OVERRIDES": {

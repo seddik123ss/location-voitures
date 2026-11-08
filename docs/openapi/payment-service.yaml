@@ -1,35 +1,1484 @@
-﻿openapi: 3.0.3
+openapi: 3.0.3
 info:
   title: payment-service
-  version: 0.1.0
-servers:
-  - url: http://localhost:8088
-    description: via la Gateway
-paths: {}
+  version: 1.0.0
+  description: |-
+    Paiements et factures de la plateforme de location de voitures (Eureka : RENTAL-PAYMENT, port 8104).
+
+    - Routes publiques `/api/payments/**`, `/api/invoices/**` : via la Gateway (8088), token Keycloak.
+    - Route interne `/internal/payments` : jamais exposée par la Gateway, rôle INTERNAL.
+    - Erreurs au format commun `{status, error, message, details}` ; JSON camelCase ; montants en TND (3 décimales).
+paths:
+  /api/invoices:
+    get:
+      operationId: apiInvoicesList
+      description: 'Les factures sont générées automatiquement (paiement RENTAL réussi,
+        frais de retour) et ne sont pas modifiables. CLIENT : ses factures ; AGENT,
+        ADMIN : toutes.'
+      summary: Lister les factures
+      parameters:
+      - in: header
+        name: X-Correlation-Id
+        schema:
+          type: string
+        description: Identifiant de corrélation, renvoyé tel quel (généré s'il est
+          absent).
+      - name: page
+        in: query
+        required: false
+        description: Numéro de page (commence à 0).
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - in: query
+        name: reservationId
+        schema:
+          type: string
+      - name: size
+        in: query
+        required: false
+        description: Taille de page (1 à 100).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      - in: query
+        name: userId
+        schema:
+          type: string
+      tags:
+      - Factures
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInvoiceList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '400':
+                  value:
+                    status: 400
+                    error: BAD_REQUEST
+                    message: La requête contient des champs invalides
+                    details:
+                    - field: amount
+                      message: Assurez-vous qu'il n'y a pas plus de 3 décimales.
+          description: Requête invalide (corps, paramètres ou en-tête)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : ADMIN'
+                    details: []
+          description: Rôle insuffisant ou ressource d'un autre utilisateur
+  /api/invoices/{id}:
+    get:
+      operationId: apiInvoicesRetrieve
+      summary: Consulter une facture et ses lignes
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required: true
+      tags:
+      - Factures
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : ADMIN'
+                    details: []
+          description: Rôle insuffisant ou ressource d'un autre utilisateur
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '404':
+                  value:
+                    status: 404
+                    error: NOT_FOUND
+                    message: Paiement 6f1c2a7e-3b9d-4c1e-9a55-2f7d8e0b1c3a introuvable
+                    details: []
+          description: Ressource introuvable
+  /api/payments:
+    get:
+      operationId: apiPaymentsList
+      description: 'CLIENT : uniquement ses paiements. AGENT, ADMIN : tous. Pagination
+        ?page=0&size=20.'
+      summary: Lister les paiements
+      parameters:
+      - in: header
+        name: X-Correlation-Id
+        schema:
+          type: string
+        description: Identifiant de corrélation, renvoyé tel quel (généré s'il est
+          absent).
+      - name: page
+        in: query
+        required: false
+        description: Numéro de page (commence à 0).
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - in: query
+        name: reservationId
+        schema:
+          type: string
+        description: Filtrer par réservation (UUID).
+      - name: size
+        in: query
+        required: false
+        description: Taille de page (1 à 100).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - FAILED
+          - PENDING
+          - REFUNDED
+          - SUCCEEDED
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - DEPOSIT
+          - EXTRA_FEE
+          - REFUND
+          - RENTAL
+      - in: query
+        name: userId
+        schema:
+          type: string
+        description: Filtrer par utilisateur (UUID) ; un CLIENT ne voit que les siens.
+      tags:
+      - Paiements
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaymentList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '400':
+                  value:
+                    status: 400
+                    error: BAD_REQUEST
+                    message: La requête contient des champs invalides
+                    details:
+                    - field: amount
+                      message: Assurez-vous qu'il n'y a pas plus de 3 décimales.
+          description: Requête invalide (corps, paramètres ou en-tête)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : ADMIN'
+                    details: []
+          description: Rôle insuffisant ou ressource d'un autre utilisateur
+    post:
+      operationId: apiPaymentsCreate
+      description: |-
+        Rôles : CLIENT (pour sa propre réservation), AGENT, ADMIN.
+
+        - `CARD` : paiement simulé ; un `cardToken` commençant par `fail_` est refusé -> le paiement est enregistré **FAILED** (réponse 201).
+        - `CASH` : AGENT/ADMIN uniquement, paiement à l'agence -> SUCCEEDED.
+        - `TRANSFER` : reste **PENDING** jusqu'à validation par un ADMIN (PATCH).
+
+        Un paiement RENTAL réussi génère une facture. Tout paiement réussi publie `PaymentSucceeded` sur `reservation.payment_succeeded`, dans la même transaction (RabbitMQ indisponible -> 503 et rien n'est enregistré).
+      summary: Payer une réservation (location ou caution)
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Clé unique générée par le client (UUID conseillé). Obligatoire
+          (400 sinon). Une clé déjà utilisée renvoie 409, même pour une requête identique.
+        required: true
+      - in: header
+        name: X-Correlation-Id
+        schema:
+          type: string
+        description: Identifiant de corrélation, renvoyé tel quel (généré s'il est
+          absent).
+      tags:
+      - Paiements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+            examples:
+              CarteAcceptée:
+                value:
+                  reservationId: 01cb68ad-4eec-4bdd-8971-ce35381c59d1
+                  type: RENTAL
+                  method: CARD
+                  amount: 270.0
+                  cardToken: tok_visa_4242
+                summary: Carte acceptée
+              CarteRefusée:
+                value:
+                  reservationId: 01cb68ad-4eec-4bdd-8971-ce35381c59d1
+                  type: RENTAL
+                  method: CARD
+                  amount: 270.0
+                  cardToken: fail_insufficient_funds
+                summary: Carte refusée
+              CautionEnEspèces(AGENT):
+                value:
+                  reservationId: 01cb68ad-4eec-4bdd-8971-ce35381c59d1
+                  type: DEPOSIT
+                  method: CASH
+                  amount: 500.0
+                summary: Caution en espèces (AGENT)
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              examples:
+                Créé:
+                  value:
+                    id: 6f1c2a7e-3b9d-4c1e-9a55-2f7d8e0b1c3a
+                    reservationId: 01cb68ad-4eec-4bdd-8971-ce35381c59d1
+                    userId: f4d1bab3-468d-428d-b02c-b44341430bfd
+                    amount: 270.0
+                    currency: TND
+                    method: CARD
+                    type: RENTAL
+                    status: SUCCEEDED
+                    transactionRef: SIM-4F2A9C1B7E03
+                    feeType: null
+                    failureReason: null
+                    originalPaymentId: null
+                    createdAt: '2026-11-08T14:30:00Z'
+                    updatedAt: '2026-11-08T14:30:00Z'
+          description: Paiement enregistré (SUCCEEDED, FAILED ou PENDING). En-tête
+            Location.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '400':
+                  value:
+                    status: 400
+                    error: BAD_REQUEST
+                    message: La requête contient des champs invalides
+                    details:
+                    - field: amount
+                      message: Assurez-vous qu'il n'y a pas plus de 3 décimales.
+          description: Requête invalide (corps, paramètres ou en-tête)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : ADMIN'
+                    details: []
+          description: Rôle insuffisant ou ressource d'un autre utilisateur
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '404':
+                  value:
+                    status: 404
+                    error: NOT_FOUND
+                    message: Réservation 9d3f0000-0000-4000-8000-000000000000 introuvable
+                    details: []
+          description: Réservation introuvable
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '409':
+                  value:
+                    status: 409
+                    error: CONFLICT
+                    message: Cette réservation est déjà payée (RENTAL)
+                    details: []
+          description: Réservation déjà payée, annulée/terminée, ou Idempotency-Key
+            déjà utilisée
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '422':
+                  value:
+                    status: 422
+                    error: UNPROCESSABLE_ENTITY
+                    message: Le montant ne correspond pas au prix attendu
+                    details:
+                    - field: amount
+                      message: 'Montant attendu : 270.000 TND, reçu : 250.000 TND'
+          description: Montant différent du prix attendu
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '502':
+                  value:
+                    status: 502
+                    error: BAD_GATEWAY
+                    message: Réponse illisible du service des réservations
+                    details: []
+          description: Réponse illisible du service des réservations
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '503':
+                  value:
+                    status: 503
+                    error: SERVICE_UNAVAILABLE
+                    message: Le service des réservations est indisponible
+                    details: []
+          description: Service des réservations ou RabbitMQ indisponible
+  /api/payments/{id}:
+    get:
+      operationId: apiPaymentsRetrieve
+      description: 'CLIENT : uniquement un de ses paiements (403 sinon). AGENT, ADMIN
+        : tous.'
+      summary: Consulter un paiement
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required: true
+      tags:
+      - Paiements
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              examples:
+                PaiementRéussi:
+                  value:
+                    id: 6f1c2a7e-3b9d-4c1e-9a55-2f7d8e0b1c3a
+                    reservationId: 01cb68ad-4eec-4bdd-8971-ce35381c59d1
+                    userId: f4d1bab3-468d-428d-b02c-b44341430bfd
+                    amount: 270.0
+                    currency: TND
+                    method: CARD
+                    type: RENTAL
+                    status: SUCCEEDED
+                    transactionRef: SIM-4F2A9C1B7E03
+                    feeType: null
+                    failureReason: null
+                    originalPaymentId: null
+                    createdAt: '2026-11-08T14:30:00Z'
+                    updatedAt: '2026-11-08T14:30:00Z'
+                  summary: Paiement réussi
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : ADMIN'
+                    details: []
+          description: Rôle insuffisant ou ressource d'un autre utilisateur
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '404':
+                  value:
+                    status: 404
+                    error: NOT_FOUND
+                    message: Paiement 6f1c2a7e-3b9d-4c1e-9a55-2f7d8e0b1c3a introuvable
+                    details: []
+          description: Ressource introuvable
+    patch:
+      operationId: apiPaymentsPartialUpdate
+      description: 'Seul un paiement **PENDING** peut être modifié (409 sinon). Usage
+        : valider un virement (`status=SUCCEEDED` + `transactionRef`) ou le rejeter
+        (`status=FAILED`). La validation déclenche la facture (RENTAL) et l''événement
+        PaymentSucceeded.'
+      summary: Modifier un paiement PENDING (ADMIN)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required: true
+      tags:
+      - Paiements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentUpdateRequest'
+            examples:
+              ValiderUnVirement:
+                value:
+                  status: SUCCEEDED
+                  transactionRef: VIR-2026-001234
+                summary: Valider un virement
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '400':
+                  value:
+                    status: 400
+                    error: BAD_REQUEST
+                    message: La requête contient des champs invalides
+                    details:
+                    - field: amount
+                      message: Assurez-vous qu'il n'y a pas plus de 3 décimales.
+          description: Requête invalide (corps, paramètres ou en-tête)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : ADMIN'
+                    details: []
+          description: Rôle insuffisant ou ressource d'un autre utilisateur
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '404':
+                  value:
+                    status: 404
+                    error: NOT_FOUND
+                    message: Paiement 6f1c2a7e-3b9d-4c1e-9a55-2f7d8e0b1c3a introuvable
+                    details: []
+          description: Ressource introuvable
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '409':
+                  value:
+                    status: 409
+                    error: CONFLICT
+                    message: 'Seul un paiement PENDING peut être modifié (statut actuel
+                      : SUCCEEDED)'
+                    details: []
+          description: Paiement non PENDING ou réservation annulée
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '422':
+                  value:
+                    status: 422
+                    error: UNPROCESSABLE_ENTITY
+                    message: Le moyen de paiement est requis pour valider le paiement
+                    details: []
+          description: Moyen de paiement manquant pour valider
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '502':
+                  value:
+                    status: 502
+                    error: BAD_GATEWAY
+                    message: Réponse illisible du service des réservations
+                    details: []
+          description: Réponse illisible du service des réservations
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '503':
+                  value:
+                    status: 503
+                    error: SERVICE_UNAVAILABLE
+                    message: Le service des réservations est indisponible
+                    details: []
+          description: Service des réservations ou RabbitMQ indisponible
+    delete:
+      operationId: apiPaymentsDestroy
+      summary: Supprimer un paiement PENDING ou FAILED (ADMIN)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required: true
+      tags:
+      - Paiements
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Supprimé
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : ADMIN'
+                    details: []
+          description: Rôle insuffisant ou ressource d'un autre utilisateur
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '404':
+                  value:
+                    status: 404
+                    error: NOT_FOUND
+                    message: Paiement 6f1c2a7e-3b9d-4c1e-9a55-2f7d8e0b1c3a introuvable
+                    details: []
+          description: Ressource introuvable
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '409':
+                  value:
+                    status: 409
+                    error: CONFLICT
+                    message: 'Seul un paiement PENDING ou FAILED peut être supprimé
+                      (statut : SUCCEEDED)'
+                    details: []
+          description: Paiement réussi/remboursé ou présent sur une facture
+  /api/payments/{id}/pay:
+    post:
+      operationId: apiPaymentsPayCreate
+      description: 'CLIENT : par carte, pour son propre paiement. AGENT/ADMIN : carte
+        ou espèces. Carte refusée (`fail_...`) -> 422 et le paiement reste PENDING.'
+      summary: Régler un paiement PENDING (frais de retour, virement non reçu)
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Clé unique générée par le client (UUID conseillé). Obligatoire
+          (400 sinon). Une clé déjà utilisée renvoie 409, même pour une requête identique.
+        required: true
+      - in: header
+        name: X-Correlation-Id
+        schema:
+          type: string
+        description: Identifiant de corrélation, renvoyé tel quel (généré s'il est
+          absent).
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required: true
+      tags:
+      - Paiements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentPayRequest'
+            examples:
+              PayerParCarte:
+                value:
+                  method: CARD
+                  cardToken: tok_visa_4242
+                summary: Payer par carte
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '400':
+                  value:
+                    status: 400
+                    error: BAD_REQUEST
+                    message: La requête contient des champs invalides
+                    details:
+                    - field: amount
+                      message: Assurez-vous qu'il n'y a pas plus de 3 décimales.
+          description: Requête invalide (corps, paramètres ou en-tête)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : ADMIN'
+                    details: []
+          description: Rôle insuffisant ou ressource d'un autre utilisateur
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '404':
+                  value:
+                    status: 404
+                    error: NOT_FOUND
+                    message: Paiement 6f1c2a7e-3b9d-4c1e-9a55-2f7d8e0b1c3a introuvable
+                    details: []
+          description: Ressource introuvable
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '409':
+                  value:
+                    status: 409
+                    error: CONFLICT
+                    message: 'Seul un paiement PENDING peut être réglé (statut actuel
+                      : SUCCEEDED)'
+                    details: []
+          description: Paiement non PENDING ou Idempotency-Key déjà utilisée
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '422':
+                  value:
+                    status: 422
+                    error: UNPROCESSABLE_ENTITY
+                    message: Carte refusée par la banque (simulation)
+                    details:
+                    - field: cardToken
+                      message: Carte refusée
+          description: Carte refusée
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '502':
+                  value:
+                    status: 502
+                    error: BAD_GATEWAY
+                    message: Réponse illisible du service des réservations
+                    details: []
+          description: Réponse illisible du service des réservations
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '503':
+                  value:
+                    status: 503
+                    error: SERVICE_UNAVAILABLE
+                    message: Le service des réservations est indisponible
+                    details: []
+          description: Service des réservations ou RabbitMQ indisponible
+  /internal/payments:
+    get:
+      operationId: internalPaymentsList
+      description: 'Réservé aux services (rôle INTERNAL), jamais routé par la Gateway.
+        Utilisé par contract-service pour vérifier que la caution est payée (`?reservationId=...&type=DEPOSIT&status=SUCCEEDED`).
+        Contrat de docs/internal-api.md : **liste simple, non paginée** (une réservation
+        n''a que quelques paiements).'
+      summary: '[Interne] Paiements d''une réservation'
+      parameters:
+      - in: header
+        name: X-Correlation-Id
+        schema:
+          type: string
+        description: Identifiant de corrélation, renvoyé tel quel (généré s'il est
+          absent).
+      - in: query
+        name: reservationId
+        schema:
+          type: string
+        description: UUID de la réservation.
+        required: true
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - FAILED
+          - PENDING
+          - REFUNDED
+          - SUCCEEDED
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - DEPOSIT
+          - EXTRA_FEE
+          - REFUND
+          - RENTAL
+      tags:
+      - Interne
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InternalPayment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '400':
+                  value:
+                    status: 400
+                    error: BAD_REQUEST
+                    message: La requête contient des champs invalides
+                    details:
+                    - field: amount
+                      message: Assurez-vous qu'il n'y a pas plus de 3 décimales.
+          description: Requête invalide (corps, paramètres ou en-tête)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '401':
+                  value:
+                    status: 401
+                    error: UNAUTHORIZED
+                    message: Authentification requise
+                    details: []
+          description: Non authentifié
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                '403':
+                  value:
+                    status: 403
+                    error: FORBIDDEN
+                    message: 'Rôle requis : INTERNAL'
+                    details: []
+          description: Rôle INTERNAL requis
 components:
-  securitySchemes:
-    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
     Error:
       type: object
-      required: [status, error, message]
       properties:
-        status: { type: integer, example: 409 }
-        error: { type: string, example: CONFLICT }
-        message: { type: string, example: Ce véhicule est déjà réservé sur ces dates }
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
         details:
           type: array
           items:
-            type: object
-            properties:
-              field: { type: string }
-              message: { type: string }
-    Page:
+            $ref: '#/components/schemas/ErrorDetail'
+      required:
+      - details
+      - error
+      - message
+      - status
+    ErrorDetail:
       type: object
       properties:
-        items: { type: array, items: {} }
-        page: { type: integer, example: 0 }
-        size: { type: integer, example: 20 }
-        total: { type: integer, example: 57 }
+        field:
+          type: string
+          nullable: true
+        message:
+          type: string
+      required:
+      - field
+      - message
+    ExtraFeeTypeEnum:
+      enum:
+      - LATE
+      - FUEL
+      - MILEAGE
+      - DAMAGE
+      type: string
+      description: |-
+        * `LATE` - Late
+        * `FUEL` - Fuel
+        * `MILEAGE` - Mileage
+        * `DAMAGE` - Damage
+    InternalPayment:
+      type: object
+      description: Exact contract of GET /internal/payments (docs/internal-api.md),
+        used by contract-service.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        reservationId:
+          type: string
+          format: uuid
+          readOnly: true
+        userId:
+          type: string
+          format: uuid
+          readOnly: true
+        amount:
+          type: number
+          format: double
+          maximum: 1000000000
+          minimum: 0.001
+          exclusiveMaximum: true
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        method:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        type:
+          allOf:
+          - $ref: '#/components/schemas/PaymentTypeEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+          default: PENDING
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - createdAt
+      - currency
+      - id
+      - method
+      - reservationId
+      - status
+      - type
+      - userId
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        number:
+          type: string
+          readOnly: true
+        reservationId:
+          type: string
+          format: uuid
+          readOnly: true
+        userId:
+          type: string
+          format: uuid
+          readOnly: true
+        total:
+          type: number
+          format: double
+          maximum: 1000000000
+          minimum: 0.001
+          exclusiveMaximum: true
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        issuedAt:
+          type: string
+          format: date-time
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+          readOnly: true
+      required:
+      - currency
+      - id
+      - issuedAt
+      - lines
+      - number
+      - reservationId
+      - total
+      - userId
+    InvoiceLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        type:
+          allOf:
+          - $ref: '#/components/schemas/PaymentTypeEnum'
+          readOnly: true
+        feeType:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ExtraFeeTypeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        amount:
+          type: number
+          format: double
+          maximum: 1000000000
+          minimum: 0.001
+          exclusiveMaximum: true
+          readOnly: true
+        paymentId:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+      required:
+      - amount
+      - feeType
+      - id
+      - label
+      - paymentId
+      - type
+    NullEnum:
+      enum:
+      - null
+    PaginatedInvoiceList:
+      type: object
+      required:
+      - items
+      - page
+      - size
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 57
+    PaginatedPaymentList:
+      type: object
+      required:
+      - items
+      - page
+      - size
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 57
+    PatchedPaymentUpdateRequest:
+      type: object
+      properties:
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentDecisionEnum'
+          description: |-
+            SUCCEEDED (valider, ex. virement reçu) ou FAILED (rejeter).
+
+            * `SUCCEEDED` - SUCCEEDED
+            * `FAILED` - FAILED
+        method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        transactionRef:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 64
+        failureReason:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+    PayableTypeEnum:
+      enum:
+      - RENTAL
+      - DEPOSIT
+      type: string
+      description: |-
+        * `RENTAL` - RENTAL
+        * `DEPOSIT` - DEPOSIT
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        reservationId:
+          type: string
+          format: uuid
+          readOnly: true
+        userId:
+          type: string
+          format: uuid
+          readOnly: true
+        amount:
+          type: number
+          format: double
+          maximum: 1000000000
+          minimum: 0.001
+          exclusiveMaximum: true
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        method:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        type:
+          allOf:
+          - $ref: '#/components/schemas/PaymentTypeEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+          default: PENDING
+        transactionRef:
+          type: string
+          readOnly: true
+          nullable: true
+        feeType:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ExtraFeeTypeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        failureReason:
+          type: string
+          readOnly: true
+          nullable: true
+        originalPaymentId:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - createdAt
+      - currency
+      - failureReason
+      - feeType
+      - id
+      - method
+      - originalPaymentId
+      - reservationId
+      - status
+      - transactionRef
+      - type
+      - updatedAt
+      - userId
+    PaymentCreateRequest:
+      type: object
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+          description: UUID de la réservation (reservation-service).
+        type:
+          allOf:
+          - $ref: '#/components/schemas/PayableTypeEnum'
+          description: |-
+            RENTAL = prix de la location, DEPOSIT = caution.
+
+            * `RENTAL` - RENTAL
+            * `DEPOSIT` - DEPOSIT
+        method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          description: |-
+            CARD (simulée), CASH (agent uniquement), TRANSFER (reste PENDING jusqu'à validation ADMIN).
+
+            * `CARD` - Card
+            * `CASH` - Cash
+            * `TRANSFER` - Transfer
+        amount:
+          type: number
+          format: double
+          maximum: 1000000000
+          minimum: 0.001
+          exclusiveMaximum: true
+          description: Montant en TND, 3 décimales ; doit égaler le prix attendu.
+        cardToken:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Jeton de carte simulé, obligatoire si method=CARD. Commence
+            par 'fail_' -> paiement refusé. Jamais stocké.
+          maxLength: 64
+      required:
+      - amount
+      - method
+      - reservationId
+      - type
+    PaymentDecisionEnum:
+      enum:
+      - SUCCEEDED
+      - FAILED
+      type: string
+      description: |-
+        * `SUCCEEDED` - SUCCEEDED
+        * `FAILED` - FAILED
+    PaymentMethodEnum:
+      enum:
+      - CARD
+      - CASH
+      - TRANSFER
+      type: string
+      description: |-
+        * `CARD` - Card
+        * `CASH` - Cash
+        * `TRANSFER` - Transfer
+    PaymentPayRequest:
+      type: object
+      properties:
+        method:
+          allOf:
+          - $ref: '#/components/schemas/SettleMethodEnum'
+          description: |-
+            CARD (simulée) ou CASH (agent uniquement).
+
+            * `CARD` - CARD
+            * `CASH` - CASH
+        cardToken:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Obligatoire si method=CARD ; 'fail_...' -> 422.
+          maxLength: 64
+      required:
+      - method
+    PaymentStatusEnum:
+      enum:
+      - PENDING
+      - SUCCEEDED
+      - FAILED
+      - REFUNDED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `SUCCEEDED` - Succeeded
+        * `FAILED` - Failed
+        * `REFUNDED` - Refunded
+    PaymentTypeEnum:
+      enum:
+      - RENTAL
+      - DEPOSIT
+      - EXTRA_FEE
+      - REFUND
+      type: string
+      description: |-
+        * `RENTAL` - Rental
+        * `DEPOSIT` - Deposit
+        * `EXTRA_FEE` - Extra Fee
+        * `REFUND` - Refund
+    SettleMethodEnum:
+      enum:
+      - CARD
+      - CASH
+      type: string
+      description: |-
+        * `CARD` - CARD
+        * `CASH` - CASH
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+servers:
+- url: http://localhost:8088
+  description: via la Gateway (routes /api)
+- url: http://localhost:8104
+  description: accès direct au service (développement, routes /internal)
+tags:
+- name: Paiements
+  description: Paiements de location, caution, frais et remboursements
+- name: Factures
+  description: Factures générées automatiquement (lecture seule)
+- name: Interne
+  description: Routes entre services (rôle INTERNAL)
 security:
-  - bearerAuth: []
+- bearerAuth: []

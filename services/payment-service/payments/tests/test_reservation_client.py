@@ -15,7 +15,8 @@ from payments.clients.reservations import (
     get_reservation_client,
 )
 from payments.correlation import _current as correlation_var
-from payments.demo_data import R1, USER_ALICE
+from payments.demo_data import CLIENT1 as USER_ALICE
+from payments.demo_data import R_CONFIRMED as R1
 
 RID = uuid.UUID("aaaaaaaa-0000-4000-8000-0000000000aa")
 VALID_PAYLOAD = {

@@ -110,7 +110,7 @@ def parse_reservation(payload) -> Reservation:
 
 class FakeReservationClient:
     """
-    In-memory reservations (payments/demo_data.py) so payment-service works before
+    In-memory reservations (docs/demo-ids.md, see payments/demo_data.py) so payment-service works before
     reservation-service exists. Two special ids simulate the remote failures:
         ...000000000503 -> 503 (service down)   ...000000000502 -> 502 (bad response)
     """
@@ -119,8 +119,8 @@ class FakeReservationClient:
 
     def __init__(self, reservations: dict | None = None):
         if reservations is None:
-            from payments.demo_data import RESERVATIONS
-            reservations = RESERVATIONS
+            from payments.demo_data import RESERVATIONS, TEST_RESERVATIONS
+            reservations = {**RESERVATIONS, **TEST_RESERVATIONS}
         self._reservations = {
             uuid.UUID(str(rid)): self._build(uuid.UUID(str(rid)), data) for rid, data in reservations.items()
         }

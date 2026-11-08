@@ -19,6 +19,25 @@ class DevHeaderAuthenticationScheme(OpenApiAuthenticationExtension):
         ]
 
 
+def publish_with_bearer_auth(result, generator, request, public):
+    """
+    Postprocessing hook. When OPENAPI_FOR_DOCS=1 (generation of docs/openapi/payment-service.yaml),
+    replace the local dev header schemes by the team's bearerAuth (Keycloak JWT), so the shared
+    contract shows the real authentication. Swagger UI in dev keeps the dev headers.
+    """
+    import os
+    if os.getenv("OPENAPI_FOR_DOCS") != "1":
+        return result
+    components = result.setdefault("components", {})
+    components["securitySchemes"] = {"bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}}
+    for path_item in result.get("paths", {}).values():
+        for operation in path_item.values():
+            if isinstance(operation, dict) and operation.get("security"):
+                operation["security"] = [{"bearerAuth": []}]
+    result["security"] = [{"bearerAuth": []}]
+    return result
+
+
 IDEMPOTENCY_KEY_PARAM = OpenApiParameter(
     name="Idempotency-Key", type=str, location=OpenApiParameter.HEADER, required=True,
     description="Clé unique générée par le client (UUID conseillé). Obligatoire (400 sinon). "

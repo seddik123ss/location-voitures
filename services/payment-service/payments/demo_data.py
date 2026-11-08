@@ -1,40 +1,52 @@
 """
-Fixed demo identifiers, shared by the seed_demo command and (step 2c) the simulated
-reservation client, so that demo payments point to reservations the fake client knows.
+Demo identifiers, copied from docs/demo-ids.md (shared by the whole team: same UUIDs
+in every database and in Keycloak). Used by the seed_demo command and by the
+simulated reservation client (RESERVATION_CLIENT=fake).
 """
 import uuid
 from decimal import Decimal
 
-USER_ALICE = uuid.UUID("11111111-1111-4111-8111-111111111111")
-USER_BOB = uuid.UUID("22222222-2222-4222-8222-222222222222")
+# --- Users (Keycloak realm location-voitures, password = <name>_pwd) ---------
+CLIENT1 = uuid.UUID("f4d1bab3-468d-428d-b02c-b44341430bfd")
+CLIENT2 = uuid.UUID("611f32de-ce7b-4927-b1c4-d113b6479d59")
+AGENT1 = uuid.UUID("11c9b774-201e-4a8c-be43-6b084b52f4c7")
+ADMIN1 = uuid.UUID("fd797399-4d3a-433d-afdd-37b0dd3437cb")
 
-# id -> reservation as returned by GET /internal/reservations/{id} (snake_case here)
+# --- Reservations (reservation-service, Aziz) ----------------------------------
+R_PENDING = uuid.UUID("01cb68ad-4eec-4bdd-8971-ce35381c59d1")
+R_CONFIRMED = uuid.UUID("33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8")
+R_COMPLETED = uuid.UUID("30eeff32-a413-42fb-9845-8ede4b7f98e0")
+
+# Same shape as GET /internal/reservations/{id} (snake_case here).
 RESERVATIONS = {
-    uuid.UUID("aaaaaaaa-0000-4000-8000-000000000001"): dict(
-        user_id=USER_ALICE, vehicle_id=uuid.UUID("cccccccc-0000-4000-8000-000000000001"),
-        start_date="2026-11-10", end_date="2026-11-13", status="CONFIRMED",
-        total_price=Decimal("450.000"), deposit_amount=Decimal("1000.000"), currency="TND",
+    R_PENDING: dict(
+        user_id=CLIENT1, vehicle_id=uuid.UUID("ecdcc60f-ed6a-4007-8622-2b568338ef7a"),
+        start_date="2026-12-10", end_date="2026-12-13", status="PENDING",
+        total_price=Decimal("270.000"), deposit_amount=Decimal("500.000"), currency="TND",
     ),
-    uuid.UUID("aaaaaaaa-0000-4000-8000-000000000002"): dict(
-        user_id=USER_ALICE, vehicle_id=uuid.UUID("cccccccc-0000-4000-8000-000000000002"),
-        start_date="2026-12-01", end_date="2026-12-03", status="PENDING",
-        total_price=Decimal("300.000"), deposit_amount=Decimal("800.000"), currency="TND",
+    R_CONFIRMED: dict(
+        user_id=CLIENT1, vehicle_id=uuid.UUID("9f03ab2d-97a5-4c08-a952-dc6e446370d1"),
+        start_date="2026-11-20", end_date="2026-11-25", status="CONFIRMED",
+        total_price=Decimal("450.000"), deposit_amount=Decimal("500.000"), currency="TND",
     ),
-    uuid.UUID("aaaaaaaa-0000-4000-8000-000000000003"): dict(
-        user_id=USER_BOB, vehicle_id=uuid.UUID("cccccccc-0000-4000-8000-000000000003"),
-        start_date="2026-11-20", end_date="2026-11-22", status="CANCELLED",
-        total_price=Decimal("200.000"), deposit_amount=Decimal("600.000"), currency="TND",
-    ),
-    uuid.UUID("aaaaaaaa-0000-4000-8000-000000000004"): dict(
-        user_id=USER_BOB, vehicle_id=uuid.UUID("cccccccc-0000-4000-8000-000000000004"),
+    R_COMPLETED: dict(
+        user_id=CLIENT2, vehicle_id=uuid.UUID("a1154300-bea1-4072-b750-2b00cf1f0bcd"),
         start_date="2026-10-01", end_date="2026-10-05", status="COMPLETED",
-        total_price=Decimal("520.500"), deposit_amount=Decimal("1000.000"), currency="TND",
-    ),
-    uuid.UUID("aaaaaaaa-0000-4000-8000-000000000005"): dict(
-        user_id=USER_BOB, vehicle_id=uuid.UUID("cccccccc-0000-4000-8000-000000000005"),
-        start_date="2026-12-15", end_date="2026-12-20", status="PENDING",
-        total_price=Decimal("750.000"), deposit_amount=Decimal("1200.000"), currency="TND",
+        total_price=Decimal("640.000"), deposit_amount=Decimal("1000.000"), currency="TND",
     ),
 }
 
-R1, R2, R3, R4, R5 = list(RESERVATIONS)
+# Extra reservation known ONLY by the simulated client (not in docs/demo-ids.md),
+# to demonstrate/test the 409 on a cancelled reservation.
+R_TEST_CANCELLED = uuid.UUID("0c0c0c0c-0000-4000-8000-00000000c4c1")
+TEST_RESERVATIONS = {
+    R_TEST_CANCELLED: dict(
+        user_id=CLIENT2, vehicle_id=uuid.UUID("15073301-d2df-45b0-9055-6b34fe40c07e"),
+        start_date="2026-12-20", end_date="2026-12-22", status="CANCELLED",
+        total_price=Decimal("600.000"), deposit_amount=Decimal("2000.000"), currency="TND",
+    ),
+}
+
+# --- Payments (this service) ---------------------------------------------------
+P_CONFIRMED = uuid.UUID("d76b538e-e367-4bb3-966b-98a4d9dc93a5")  # r-confirmed, RENTAL 450.000, SUCCEEDED
+P_COMPLETED = uuid.UUID("918e07dc-4995-4985-8373-aad04e13636f")  # r-completed, RENTAL 640.000, SUCCEEDED

@@ -27,6 +27,16 @@ class PaymentSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class InternalPaymentSerializer(serializers.ModelSerializer):
+    """Exact contract of GET /internal/payments (docs/internal-api.md), used by contract-service."""
+    amount = serializers.DecimalField(**AMOUNT, read_only=True)
+
+    class Meta:
+        model = Payment
+        fields = ["id", "reservation_id", "user_id", "amount", "currency", "method", "type", "status", "created_at"]
+        read_only_fields = fields
+
+
 class InvoiceLineSerializer(serializers.ModelSerializer):
     amount = serializers.DecimalField(**AMOUNT, read_only=True)
     payment_id = serializers.UUIDField(read_only=True, allow_null=True)

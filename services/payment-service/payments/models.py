@@ -76,10 +76,11 @@ class Payment(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(amount__gt=0), name="payment_amount_positive"),
             models.CheckConstraint(condition=Q(currency="TND"), name="payment_currency_tnd"),
-            # Only a PENDING payment may have no method yet.
+            # A method is required once money has moved (SUCCEEDED / REFUNDED). A PENDING
+            # fee has none yet, and it can become FAILED without one (reservation cancelled).
             models.CheckConstraint(
-                condition=Q(method__isnull=False) | Q(status="PENDING"),
-                name="payment_method_required_unless_pending",
+                condition=Q(method__isnull=False) | Q(status__in=["PENDING", "FAILED"]),
+                name="payment_method_required_when_money_moved",
             ),
             # A REFUND always points to the payment it refunds.
             models.CheckConstraint(

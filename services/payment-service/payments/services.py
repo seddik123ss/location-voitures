@@ -381,9 +381,9 @@ class EventResult:
 
 def handle_reservation_cancelled(event_id, data: dict, queue="payment.reservation_cancelled") -> EventResult:
     """
-    ReservationCancelled {reservationId, userId, cancelledAt, reason?}:
-    one REFUND per SUCCEEDED RENTAL/DEPOSIT payment (the original becomes REFUNDED);
-    PENDING payments of the reservation become FAILED.
+    ReservationCancelled {reservationId, userId, cancelledAt, reason?} (docs/events/README.md):
+    one REFUND per SUCCEEDED payment of the reservation (RENTAL, DEPOSIT, EXTRA_FEE),
+    the original becomes REFUNDED; PENDING payments of the reservation become FAILED.
     """
     reservation_id = _uuid(data, "reservationId")
     result = EventResult()
@@ -392,9 +392,7 @@ def handle_reservation_cancelled(event_id, data: dict, queue="payment.reservatio
             result.duplicate = True
             return result
         payments = Payment.objects.select_for_update().filter(reservation_id=reservation_id)
-        for original in payments.filter(
-            status=PaymentStatus.SUCCEEDED, type__in=[PaymentType.RENTAL, PaymentType.DEPOSIT]
-        ):
+        for original in payments.filter(status=PaymentStatus.SUCCEEDED).exclude(type=PaymentType.REFUND):
             result.refunds.append(Payment.objects.create(
                 reservation_id=reservation_id, user_id=original.user_id, amount=original.amount,
                 method=original.method, type=PaymentType.REFUND, status=PaymentStatus.SUCCEEDED,
@@ -414,6 +412,9 @@ def handle_return_settled(event_id, data: dict, queue="payment.return_settled") 
     """
     ReturnSettled {contractId, reservationId, userId, extraFees:[{type, amount}], depositToRelease}:
     - depositToRelease > 0 -> REFUND of that amount, the DEPOSIT becomes REFUNDED;
+      if no deposit was paid through payment-service (e.g. cash outside the system, or
+      the demo data of docs/demo-ids.md), a warning is logged and only the fees are processed,
+      so a valid message is never sent to the .dlq for that reason;
     - each fee -> EXTRA_FEE payment PENDING (the client pays it later);
     - one invoice for the fees, if any.
     """
@@ -436,16 +437,20 @@ def handle_return_settled(event_id, data: dict, queue="payment.return_settled") 
                        .filter(reservation_id=reservation_id, type=PaymentType.DEPOSIT, status=PaymentStatus.SUCCEEDED)
                        .first())
             if deposit is None:
-                raise InvalidEvent("Aucune caution payée à rendre pour cette réservation")
-            if to_release > deposit.amount:
+                logger.warning(
+                    "ReturnSettled %s: depositToRelease=%s but no SUCCEEDED DEPOSIT for reservation %s; "
+                    "no refund created, fees still processed", event_id, to_release, reservation_id,
+                )
+            elif to_release > deposit.amount:
                 raise InvalidEvent(f"depositToRelease ({to_release}) dépasse la caution payée ({deposit.amount})")
-            result.refunds.append(Payment.objects.create(
-                reservation_id=reservation_id, user_id=deposit.user_id, amount=to_release,
-                method=deposit.method, type=PaymentType.REFUND, status=PaymentStatus.SUCCEEDED,
-                transaction_ref=_new_ref("REF"), original_payment=deposit,
-            ))
-            deposit.status = PaymentStatus.REFUNDED
-            deposit.save(update_fields=["status", "updated_at"])
+            else:
+                result.refunds.append(Payment.objects.create(
+                    reservation_id=reservation_id, user_id=deposit.user_id, amount=to_release,
+                    method=deposit.method, type=PaymentType.REFUND, status=PaymentStatus.SUCCEEDED,
+                    transaction_ref=_new_ref("REF"), original_payment=deposit,
+                ))
+                deposit.status = PaymentStatus.REFUNDED
+                deposit.save(update_fields=["status", "updated_at"])
         for fee_type, amount in fees:
             result.fees.append(Payment.objects.create(
                 reservation_id=reservation_id, user_id=user_id, amount=amount, method=None,

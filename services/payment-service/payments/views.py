@@ -22,6 +22,7 @@ from .models import Invoice, Payment
 from .schema import CORRELATION_PARAM, E400, E401, E403, E404, E502, E503, IDEMPOTENCY_KEY_PARAM, error
 from .serializers import (
     InternalPaymentFilterSerializer,
+    InternalPaymentSerializer,
     InvoiceFilterSerializer,
     InvoiceSerializer,
     PaymentCreateSerializer,
@@ -56,9 +57,9 @@ def _apply(qs, filters: dict):
 
 PAYMENT_EXAMPLE = {
     "id": "6f1c2a7e-3b9d-4c1e-9a55-2f7d8e0b1c3a",
-    "reservationId": "aaaaaaaa-0000-4000-8000-000000000002",
-    "userId": "11111111-1111-4111-8111-111111111111",
-    "amount": 300.0, "currency": "TND", "method": "CARD", "type": "RENTAL", "status": "SUCCEEDED",
+    "reservationId": "01cb68ad-4eec-4bdd-8971-ce35381c59d1",
+    "userId": "f4d1bab3-468d-428d-b02c-b44341430bfd",
+    "amount": 270.0, "currency": "TND", "method": "CARD", "type": "RENTAL", "status": "SUCCEEDED",
     "transactionRef": "SIM-4F2A9C1B7E03", "feeType": None, "failureReason": None, "originalPaymentId": None,
     "createdAt": "2026-11-08T14:30:00Z", "updatedAt": "2026-11-08T14:30:00Z",
 }
@@ -72,6 +73,7 @@ FILTER_PARAMS = [
 
 # --- /api/payments -------------------------------------------------------------
 
+@extend_schema(tags=["Paiements"])
 @extend_schema_view(
     list=extend_schema(
         summary="Lister les paiements",
@@ -121,24 +123,24 @@ class PaymentViewSet(viewsets.GenericViewSet):
         request=PaymentCreateSerializer,
         examples=[
             OpenApiExample("Carte acceptée", request_only=True, value={
-                "reservationId": "aaaaaaaa-0000-4000-8000-000000000002", "type": "RENTAL",
-                "method": "CARD", "amount": 300.000, "cardToken": "tok_visa_4242"}),
+                "reservationId": "01cb68ad-4eec-4bdd-8971-ce35381c59d1", "type": "RENTAL",
+                "method": "CARD", "amount": 270.000, "cardToken": "tok_visa_4242"}),
             OpenApiExample("Carte refusée", request_only=True, value={
-                "reservationId": "aaaaaaaa-0000-4000-8000-000000000002", "type": "RENTAL",
-                "method": "CARD", "amount": 300.000, "cardToken": "fail_insufficient_funds"}),
+                "reservationId": "01cb68ad-4eec-4bdd-8971-ce35381c59d1", "type": "RENTAL",
+                "method": "CARD", "amount": 270.000, "cardToken": "fail_insufficient_funds"}),
             OpenApiExample("Caution en espèces (AGENT)", request_only=True, value={
-                "reservationId": "aaaaaaaa-0000-4000-8000-000000000002", "type": "DEPOSIT",
-                "method": "CASH", "amount": 800.000}),
+                "reservationId": "01cb68ad-4eec-4bdd-8971-ce35381c59d1", "type": "DEPOSIT",
+                "method": "CASH", "amount": 500.000}),
             OpenApiExample("Créé", response_only=True, status_codes=["201"], value=PAYMENT_EXAMPLE),
         ],
         responses={
             201: OpenApiResponse(PaymentSerializer, description="Paiement enregistré (SUCCEEDED, FAILED ou PENDING). En-tête Location."),
             400: E400, 401: E401, 403: E403,
-            404: error(404, "Réservation introuvable", "Réservation aaaaaaaa-0000-4000-8000-0000000000ff introuvable"),
+            404: error(404, "Réservation introuvable", "Réservation 9d3f0000-0000-4000-8000-000000000000 introuvable"),
             409: error(409, "Réservation déjà payée, annulée/terminée, ou Idempotency-Key déjà utilisée",
                        "Cette réservation est déjà payée (RENTAL)"),
             422: error(422, "Montant différent du prix attendu", "Le montant ne correspond pas au prix attendu",
-                       [{"field": "amount", "message": "Montant attendu : 300.000 TND, reçu : 250.000 TND"}]),
+                       [{"field": "amount", "message": "Montant attendu : 270.000 TND, reçu : 250.000 TND"}]),
             502: E502, 503: E503,
         },
     )
@@ -211,6 +213,7 @@ class PaymentViewSet(viewsets.GenericViewSet):
 
 # --- /api/invoices ---------------------------------------------------------------
 
+@extend_schema(tags=["Factures"])
 @extend_schema_view(
     list=extend_schema(
         summary="Lister les factures",
@@ -249,30 +252,32 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
 
 # --- /internal/payments (between services, role INTERNAL) -------------------------
 
+@extend_schema(tags=["Interne"])
 @extend_schema_view(
     list=extend_schema(
         summary="[Interne] Paiements d'une réservation",
         description="Réservé aux services (rôle INTERNAL), jamais routé par la Gateway. Utilisé par "
-                    "contract-service pour vérifier que la caution est payée : "
-                    "`?reservationId=...&type=DEPOSIT&status=SUCCEEDED`.",
+                    "contract-service pour vérifier que la caution est payée "
+                    "(`?reservationId=...&type=DEPOSIT&status=SUCCEEDED`). Contrat de docs/internal-api.md : "
+                    "**liste simple, non paginée** (une réservation n'a que quelques paiements).",
         parameters=[
             OpenApiParameter("reservationId", str, required=True, description="UUID de la réservation."),
             OpenApiParameter("type", str, enum=["RENTAL", "DEPOSIT", "EXTRA_FEE", "REFUND"]),
             OpenApiParameter("status", str, enum=["PENDING", "SUCCEEDED", "FAILED", "REFUNDED"]),
             CORRELATION_PARAM,
         ],
-        responses={200: PaymentSerializer(many=True), 400: E400, 401: E401,
+        responses={200: InternalPaymentSerializer(many=True), 400: E400, 401: E401,
                    403: error(403, "Rôle INTERNAL requis", "Rôle requis : INTERNAL")},
     ),
 )
 class InternalPaymentViewSet(viewsets.GenericViewSet):
-    serializer_class = PaymentSerializer
+    serializer_class = InternalPaymentSerializer
     queryset = Payment.objects.none()
+    pagination_class = None  # plain list, per docs/internal-api.md
 
     def get_permissions(self):
         return [has_role(Role.INTERNAL)()]
 
     def list(self, request):
         qs = _apply(Payment.objects.all(), _query_filters(request, InternalPaymentFilterSerializer))
-        page = self.paginate_queryset(qs)
-        return self.get_paginated_response(PaymentSerializer(page, many=True).data)
+        return Response(InternalPaymentSerializer(qs.order_by("created_at"), many=True).data)
