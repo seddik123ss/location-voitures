@@ -166,7 +166,7 @@ paths:
           schema:
             type: string
             format: uuid
-            pattern: '[0-9a-f]{8}-[0-9a-f]{4}-[13-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
           example: b15d796a-8360-46da-a5e1-f9c580aac77f
       responses:
         '200':
@@ -196,7 +196,7 @@ paths:
           schema:
             type: string
             format: uuid
-            pattern: '[0-9a-f]{8}-[0-9a-f]{4}-[13-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
           example: b15d796a-8360-46da-a5e1-f9c580aac77f
       requestBody:
         required: true
@@ -254,7 +254,7 @@ paths:
           schema:
             type: string
             format: uuid
-            pattern: '[0-9a-f]{8}-[0-9a-f]{4}-[13-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
           example: b15d796a-8360-46da-a5e1-f9c580aac77f
       responses:
         '204':
@@ -299,7 +299,7 @@ paths:
           schema:
             type: string
             format: uuid
-            pattern: '[0-9a-f]{8}-[0-9a-f]{4}-[13-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
           example: b15d796a-8360-46da-a5e1-f9c580aac77f
       requestBody:
         required: true
@@ -360,7 +360,7 @@ paths:
           schema:
             type: string
             format: uuid
-            pattern: '[0-9a-f]{8}-[0-9a-f]{4}-[13-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
           example: b15d796a-8360-46da-a5e1-f9c580aac77f
       requestBody:
         required: true
@@ -419,7 +419,7 @@ paths:
           schema:
             type: string
             format: uuid
-            pattern: '[0-9a-f]{8}-[0-9a-f]{4}-[13-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
           example: b15d796a-8360-46da-a5e1-f9c580aac77f
       requestBody:
         required: true

@@ -60,12 +60,12 @@ class Complaint
 
     /** @var Collection<int, ComplaintMessage> */
     #[ORM\OneToMany(targetEntity: ComplaintMessage::class, mappedBy: 'complaint', cascade: ['persist'], orphanRemoval: true)]
-    #[ORM\OrderBy(['createdAt' => 'ASC'])]
+    #[ORM\OrderBy(['position' => 'ASC'])]
     private Collection $messages;
 
     /** @var Collection<int, ComplaintStatusHistory> */
     #[ORM\OneToMany(targetEntity: ComplaintStatusHistory::class, mappedBy: 'complaint', cascade: ['persist'], orphanRemoval: true)]
-    #[ORM\OrderBy(['changedAt' => 'ASC'])]
+    #[ORM\OrderBy(['position' => 'ASC'])]
     private Collection $statusHistory;
 
     public function __construct(
@@ -92,7 +92,7 @@ class Complaint
         $this->messages = new ArrayCollection();
         $this->statusHistory = new ArrayCollection();
         // Première entrée de l'historique : création en OPEN par le client.
-        $this->statusHistory->add(new ComplaintStatusHistory($this, null, ComplaintStatus::OPEN, $userId, AuthorRole::CLIENT, null, $this->createdAt));
+        $this->statusHistory->add(new ComplaintStatusHistory($this, 1, null, ComplaintStatus::OPEN, $userId, AuthorRole::CLIENT, null, $this->createdAt));
     }
 
     /**
@@ -106,7 +106,7 @@ class Complaint
             throw new InvalidStatusTransition($this->status, $target);
         }
         $at ??= new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-        $entry = new ComplaintStatusHistory($this, $this->status, $target, $changedBy, $role, $comment, $at);
+        $entry = new ComplaintStatusHistory($this, $this->statusHistory->count() + 1, $this->status, $target, $changedBy, $role, $comment, $at);
         $this->statusHistory->add($entry);
         $this->status = $target;
         $this->updatedAt = $at;
@@ -116,7 +116,7 @@ class Complaint
 
     public function addMessage(string $authorId, AuthorRole $role, string $content, ?\DateTimeImmutable $at = null): ComplaintMessage
     {
-        $message = new ComplaintMessage($this, $authorId, $role, $content, $at);
+        $message = new ComplaintMessage($this, $this->messages->count() + 1, $authorId, $role, $content, $at);
         $this->messages->add($message);
         $this->updatedAt = $message->getCreatedAt();
 

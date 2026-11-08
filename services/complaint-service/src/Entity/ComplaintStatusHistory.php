@@ -11,11 +11,16 @@ use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: ComplaintStatusHistoryRepository::class)]
 #[ORM\Table(name: 'complaint_status_history')]
+#[ORM\UniqueConstraint(name: 'uniq_complaint_history_position', columns: ['complaint_id', 'position'])]
 class ComplaintStatusHistory
 {
     #[ORM\Id]
     #[ORM\Column(type: Types::GUID)]
     private string $id;
+
+    /** Rang dans la réclamation (1 = création) : ordre fiable même si deux changements ont la même seconde. */
+    #[ORM\Column]
+    private int $position;
 
     #[ORM\ManyToOne(targetEntity: Complaint::class, inversedBy: 'statusHistory')]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
@@ -40,9 +45,10 @@ class ComplaintStatusHistory
     #[ORM\Column]
     private \DateTimeImmutable $changedAt;
 
-    public function __construct(Complaint $complaint, ?ComplaintStatus $fromStatus, ComplaintStatus $toStatus, string $changedBy, AuthorRole $changedByRole, ?string $comment, \DateTimeImmutable $changedAt)
+    public function __construct(Complaint $complaint, int $position, ?ComplaintStatus $fromStatus, ComplaintStatus $toStatus, string $changedBy, AuthorRole $changedByRole, ?string $comment, \DateTimeImmutable $changedAt)
     {
         $this->id = Uuid::v4()->toRfc4122();
+        $this->position = $position;
         $this->complaint = $complaint;
         $this->fromStatus = $fromStatus;
         $this->toStatus = $toStatus;
@@ -53,6 +59,7 @@ class ComplaintStatusHistory
     }
 
     public function getId(): string { return $this->id; }
+    public function getPosition(): int { return $this->position; }
     public function getComplaint(): Complaint { return $this->complaint; }
     public function getFromStatus(): ?ComplaintStatus { return $this->fromStatus; }
     public function getToStatus(): ComplaintStatus { return $this->toStatus; }

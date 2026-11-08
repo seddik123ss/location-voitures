@@ -18,9 +18,9 @@ security:
         - { path: ^/api/doc, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: IS_AUTHENTICATED }
 
-# Appelant provisoire (en-têtes X-Dev-User-Id / X-Dev-Roles) : environnement dev seulement.
+# Appelant provisoire (en-têtes X-Dev-User-Id / X-Dev-Roles) : environnements dev et test seulement.
 # À l'étape Sécurité, remplacé par l'authenticator JWT Keycloak.
-when@dev:
+when@dev: &dev_security
     security:
         firewalls:
             main:
@@ -29,3 +29,5 @@ when@dev:
                 entry_point: App\Security\JsonAuthenticationEntryPoint
                 custom_authenticators:
                     - App\Security\DevHeaderAuthenticator
+
+when@test: *dev_security

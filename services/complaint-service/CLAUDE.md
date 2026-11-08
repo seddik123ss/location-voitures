@@ -23,11 +23,17 @@ php bin/console doctrine:fixtures:load --no-interaction     # purges complaint_d
 php bin/console doctrine:schema:validate
 php bin/console doctrine:migrations:diff                    # after changing an entity
 php -S 0.0.0.0:8106 -t public
-php bin/phpunit                                              # all tests
-php bin/phpunit --filter testName                            # single test
+composer test                                                # recreate complaint_db_test + migrations + fixtures, then the whole suite
+composer test:db                                             # only recreate the test database
+php bin/phpunit --filter ChangeStatusTest                    # single class/test (after composer test:db)
 ```
 
-PHPUnit fails on deprecations, notices and warnings (`phpunit.dist.xml`).
+Tests:
+- PHPUnit fails on deprecations, notices and warnings (`phpunit.dist.xml`).
+- The test DB is `complaint_db_test`: `.env.test` sets `DATABASE_URL`, because `.env.local` isn't loaded in test, and Doctrine adds the `_test` suffix.
+- dama/doctrine-test-bundle wraps each test in a transaction that is rolled back, so every test starts from the fixtures. Never rely on test order; the suite passes with `--order-by=random`.
+- Functional tests extend `tests/Functional/ApiTestCase.php`. Use `request($method, $uri, self::CLIENT2, $body)` and `assertError($status, 'CONFLICT', 'message part', ['field'])`. The dev authenticator is also active under `when@test`.
+- `complaint_svc` needs rights on `complaint_db%`: they are in `infra/mysql/init.sql`, and `scripts/grant-test-db.sql` grants them on an existing volume.
 
 API docs: Swagger UI at http://localhost:8106/api/doc, JSON at `/api/doc.json` (both public). After changing a route, a DTO or `config/packages/nelmio_api_doc.yaml`, regenerate the shared contract with `composer openapi:dump`, which writes `../../docs/openapi/complaint-service.yaml` in UTF-8 without BOM, with LF. Never use `nelmio:apidoc:dump > file` in PowerShell 5.1, because it writes UTF-16.
 
@@ -42,6 +48,8 @@ The root `.gitignore` ignores `.env`, so this service versions `.env.dist` (Symf
 ## Domain model
 
 - `Complaint` is the aggregate root. It owns `ComplaintMessage` and `ComplaintStatusHistory` (cascade persist, `onDelete: CASCADE`). State changes go through its methods (`changeStatus()`, `addMessage()`, `update()`), which also maintain `updatedAt`. Don't add setters for status.
+- Messages and history entries have a per-complaint `position` (1, 2, ...), assigned by `Complaint`, unique per complaint and used for ordering. MySQL `DATETIME` has only one-second precision, so `createdAt` / `changedAt` can tie.
+- Route ids accept upper and lower case (custom `UUID` pattern in `ComplaintController`; `Requirement::UUID` is lowercase-only). Every UUID is lowercased before any query or storage.
 - A complaint references a reservation and/or a contract (`reservationId`, `contractId`) from other services by UUID only; there are no foreign keys across services.
 - IDs (own and foreign) are UUID v4 strings stored as `CHAR(36)` (Doctrine `guid`), generated with `symfony/uid`. The constructor accepts a fixed `id` so fixtures can reuse the UUIDs from `docs/demo-ids.md`. Timestamps are `DateTimeImmutable` in UTC.
 - Enums in `src/Enum/` (backed strings, mapped with `enumType`): `ComplaintCategory`, `ComplaintPriority`, `ComplaintStatus`, `AuthorRole`.

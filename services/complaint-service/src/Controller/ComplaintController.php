@@ -20,7 +20,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 
 /**
@@ -31,6 +30,8 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
 #[OA\Tag(name: 'Réclamations')]
 final class ComplaintController extends AbstractController
 {
+    /** UUID insensible à la casse (Requirement::UUID n'accepte que les minuscules) ; le service normalise en minuscules. */
+    private const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
     private const BODY_FIRST = 'Le corps est validé avant la recherche de la réclamation : un corps invalide renvoie 400 même si la réclamation n\'existe pas.';
 
     public function __construct(
@@ -71,7 +72,7 @@ final class ComplaintController extends AbstractController
         ]);
     }
 
-    #[Route('/{id}', name: 'complaint_show', requirements: ['id' => Requirement::UUID], methods: ['GET'])]
+    #[Route('/{id}', name: 'complaint_show', requirements: ['id' => self::UUID], methods: ['GET'])]
     #[OA\Get(
         summary: 'Détail d\'une réclamation',
         description: 'Avec messages, historique des statuts et transitions encore possibles. CLIENT : seulement les siennes (403 sinon).',
@@ -122,7 +123,7 @@ final class ComplaintController extends AbstractController
         ]);
     }
 
-    #[Route('/{id}', name: 'complaint_update', requirements: ['id' => Requirement::UUID], methods: ['PUT'])]
+    #[Route('/{id}', name: 'complaint_update', requirements: ['id' => self::UUID], methods: ['PUT'])]
     #[OA\Put(
         summary: 'Modifier une réclamation',
         description: 'Client auteur uniquement, tant que la réclamation est OPEN (409 sinon). Remplace subject, description et category. ' . self::BODY_FIRST,
@@ -148,7 +149,7 @@ final class ComplaintController extends AbstractController
         return ApiResponse::json($this->presenter->detail($complaint));
     }
 
-    #[Route('/{id}', name: 'complaint_delete', requirements: ['id' => Requirement::UUID], methods: ['DELETE'])]
+    #[Route('/{id}', name: 'complaint_delete', requirements: ['id' => self::UUID], methods: ['DELETE'])]
     #[OA\Delete(
         summary: 'Supprimer une réclamation',
         description: 'Client auteur tant que la réclamation est OPEN (409 sinon) ; ADMIN quel que soit le statut. Messages et historique sont supprimés avec elle.',
@@ -170,7 +171,7 @@ final class ComplaintController extends AbstractController
         return new Response(null, Response::HTTP_NO_CONTENT);
     }
 
-    #[Route('/{id}/status', name: 'complaint_change_status', requirements: ['id' => Requirement::UUID], methods: ['PATCH'])]
+    #[Route('/{id}/status', name: 'complaint_change_status', requirements: ['id' => self::UUID], methods: ['PATCH'])]
     #[OA\Patch(
         summary: 'Changer le statut',
         description: 'AGENT ou ADMIN. Transitions autorisées : OPEN → IN_PROGRESS | REJECTED ; IN_PROGRESS → RESOLVED | REJECTED | OPEN. RESOLVED et REJECTED sont finaux (409). Le changement est ajouté à l\'historique avec le commentaire. ' . self::BODY_FIRST,
@@ -197,7 +198,7 @@ final class ComplaintController extends AbstractController
         return ApiResponse::json($this->presenter->detail($complaint));
     }
 
-    #[Route('/{id}/priority', name: 'complaint_change_priority', requirements: ['id' => Requirement::UUID], methods: ['PATCH'])]
+    #[Route('/{id}/priority', name: 'complaint_change_priority', requirements: ['id' => self::UUID], methods: ['PATCH'])]
     #[OA\Patch(
         summary: 'Changer la priorité',
         description: 'AGENT ou ADMIN, refusé (409) si la réclamation est dans un état final (RESOLVED, REJECTED). Met à jour updatedAt ; le changement n\'est pas gardé dans l\'historique. ' . self::BODY_FIRST,
@@ -223,7 +224,7 @@ final class ComplaintController extends AbstractController
         return ApiResponse::json($this->presenter->detail($complaint));
     }
 
-    #[Route('/{id}/messages', name: 'complaint_add_message', requirements: ['id' => Requirement::UUID], methods: ['POST'])]
+    #[Route('/{id}/messages', name: 'complaint_add_message', requirements: ['id' => self::UUID], methods: ['POST'])]
     #[OA\Post(
         summary: 'Ajouter un message',
         description: 'Client auteur, AGENT ou ADMIN ; refusé (409) si la réclamation est dans un état final. Le rôle de l\'auteur est enregistré avec le message. ' . self::BODY_FIRST,
