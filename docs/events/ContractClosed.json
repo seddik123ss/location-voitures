@@ -1,0 +1,10 @@
+{
+  "eventId": "955aea6d-bb69-4b51-81b1-a2f025d2ff35",
+  "type": "ContractClosed",
+  "occurredAt": "2026-10-05T18:45:00Z",
+  "data": {
+    "contractId": "6804f1c2-925a-4604-94d4-487853bc1cac",
+    "reservationId": "30eeff32-a413-42fb-9845-8ede4b7f98e0",
+    "closedAt": "2026-10-05T18:45:00Z"
+  }
+}

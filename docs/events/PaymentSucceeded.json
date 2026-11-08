@@ -1,0 +1,13 @@
+{
+  "eventId": "939abb05-3333-4bfc-9204-6ddaeb51013b",
+  "type": "PaymentSucceeded",
+  "occurredAt": "2026-11-08T14:30:00Z",
+  "data": {
+    "paymentId": "d76b538e-e367-4bb3-966b-98a4d9dc93a5",
+    "reservationId": "33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8",
+    "userId": "f4d1bab3-468d-428d-b02c-b44341430bfd",
+    "amount": 450.0,
+    "currency": "TND",
+    "type": "RENTAL"
+  }
+}

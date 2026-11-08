@@ -1,0 +1,21 @@
+{
+  "eventId": "dbf0d035-f15a-4a96-be2b-035f8b74438f",
+  "type": "ReturnSettled",
+  "occurredAt": "2026-10-05T18:45:00Z",
+  "data": {
+    "contractId": "6804f1c2-925a-4604-94d4-487853bc1cac",
+    "reservationId": "30eeff32-a413-42fb-9845-8ede4b7f98e0",
+    "userId": "611f32de-ce7b-4927-b1c4-d113b6479d59",
+    "extraFees": [
+      {
+        "type": "LATE",
+        "amount": 160.0
+      },
+      {
+        "type": "FUEL",
+        "amount": 35.0
+      }
+    ],
+    "depositToRelease": 1000.0
+  }
+}

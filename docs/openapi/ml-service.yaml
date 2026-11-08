@@ -1,0 +1,35 @@
+﻿openapi: 3.0.3
+info:
+  title: ml-service
+  version: 0.1.0
+servers:
+  - url: http://localhost:8088
+    description: via la Gateway
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Error:
+      type: object
+      required: [status, error, message]
+      properties:
+        status: { type: integer, example: 409 }
+        error: { type: string, example: CONFLICT }
+        message: { type: string, example: Ce véhicule est déjà réservé sur ces dates }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+    Page:
+      type: object
+      properties:
+        items: { type: array, items: {} }
+        page: { type: integer, example: 0 }
+        size: { type: integer, example: 20 }
+        total: { type: integer, example: 57 }
+security:
+  - bearerAuth: []
