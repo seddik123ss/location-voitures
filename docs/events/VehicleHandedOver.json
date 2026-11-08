@@ -1,0 +1,12 @@
+{
+  "eventId": "aa836598-0059-4b1b-bb91-a9e520d86c15",
+  "type": "VehicleHandedOver",
+  "occurredAt": "2026-10-01T09:00:00Z",
+  "data": {
+    "contractId": "6804f1c2-925a-4604-94d4-487853bc1cac",
+    "reservationId": "30eeff32-a413-42fb-9845-8ede4b7f98e0",
+    "vehicleId": "a1154300-bea1-4072-b750-2b00cf1f0bcd",
+    "mileage": 42150,
+    "handedOverAt": "2026-10-01T09:00:00Z"
+  }
+}

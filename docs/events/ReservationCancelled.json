@@ -1,0 +1,11 @@
+{
+  "eventId": "b2d83e2e-0e07-4cc5-a5d1-75ac9d733a9e",
+  "type": "ReservationCancelled",
+  "occurredAt": "2026-11-10T09:00:00Z",
+  "data": {
+    "reservationId": "33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8",
+    "userId": "f4d1bab3-468d-428d-b02c-b44341430bfd",
+    "cancelledAt": "2026-11-10T09:00:00Z",
+    "reason": "Changement de programme"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "eventId": "1f11e045-cd86-4fea-9c30-a16f7ddb75ee",
+  "type": "ReservationCompleted",
+  "occurredAt": "2026-10-05T18:46:00Z",
+  "data": {
+    "reservationId": "30eeff32-a413-42fb-9845-8ede4b7f98e0",
+    "vehicleId": "a1154300-bea1-4072-b750-2b00cf1f0bcd",
+    "categoryId": "a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c",
+    "agencyId": "1deb1dea-ab54-436d-8ed7-c3322f782c88",
+    "startDate": "2026-10-01",
+    "endDate": "2026-10-05",
+    "totalPrice": 640.0,
+    "bookedAt": "2026-09-15T10:12:00Z"
+  }
+}
