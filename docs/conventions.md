@@ -60,3 +60,11 @@ content_type `application/json`, Delivery mode 2 (Persistent), coller le JSON d'
 
 ## Git
 Une branche `feature/<service>` par membre, fusion dans `main` par pull request relue, checklist du modèle de PR cochée.
+
+## Adresse annoncée dans Eureka
+Chaque service lancé sur Windows s'annonce sous le nom `host.docker.internal` (variable `SERVICE_HOST=host.docker.internal`), jamais avec une IP détectée automatiquement. Ce nom fonctionne depuis Windows et depuis les conteneurs Docker (Gateway).
+- Spring Boot : `eureka.instance.hostname=host.docker.internal` et `eureka.instance.prefer-ip-address=false`
+- ASP.NET Core (Steeltoe) : `eureka:instance:hostName` = `host.docker.internal`
+- Python (py-eureka-client) : `instance_host="host.docker.internal"`
+- Next.js (eureka-js-client) : `instance.hostName` = `host.docker.internal`, `instance.ipAddr` = `host.docker.internal`
+- PHP (shared/php-eureka) : déjà fait, via `SERVICE_HOST` (par défaut `host.docker.internal`)
