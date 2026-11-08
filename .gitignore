@@ -1,0 +1,15 @@
+﻿.env
+.env.local
+vendor/
+node_modules/
+.next/
+dist/
+var/
+__pycache__/
+.venv/
+bin/
+obj/
+target/
+.idea/
+.vscode/
+*.log
