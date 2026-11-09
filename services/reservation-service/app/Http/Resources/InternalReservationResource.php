@@ -32,8 +32,9 @@ class InternalReservationResource extends JsonResource
         ];
     }
 
-    public function jsonOptions(): int
+    /** Toujours passer par Json::response() : c'est lui qui écrit les montants à 3 décimales. */
+    public function toResponse($request)
     {
-        return Json::FLAGS;
+        return Json::response($this->resolve($request));
     }
 }

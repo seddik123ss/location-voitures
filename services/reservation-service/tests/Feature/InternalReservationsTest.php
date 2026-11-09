@@ -41,8 +41,8 @@ class InternalReservationsTest extends TestCase
             'depositAmount' => 500.0,
             'currency' => 'TND',
         ]);
-        // Montants écrits en nombres décimaux, comme les attend payment-service.
-        $this->assertStringContainsString('"totalPrice":450.0,"depositAmount":500.0', $response->getContent());
+        // Montants : nombres JSON à 3 décimales (docs/conventions.md), lus en BigDecimal 450.000 par user-service.
+        $this->assertStringContainsString('"totalPrice":450.000,"depositAmount":500.000,"currency":"TND"}', $response->getContent());
     }
 
     public function test_montants_de_demo_alignes_sur_les_paiements(): void
