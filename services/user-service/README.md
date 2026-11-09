@@ -156,6 +156,14 @@ Token de service (rôle INTERNAL) : `grant_type=client_credentials`, `client_id=
 Tant que la route d'Aziz n'est pas prête, `RESERVATIONS_MOCK=true` active `MockReservationHistory`, qui renvoie les réservations de `docs/demo-ids.md` (client1 : 2, client2 : 1).
 Pour la démo réelle : `RESERVATIONS_MOCK=false` dans `.env`, redémarrer. Sans reservation-service lancé, la route renvoie 503.
 
+Démo du workshop (5 min) : [demo-openfeign.ps1](demo-openfeign.ps1) enchaîne client1 → 200 (2 réservations), reservation-service arrêté → 503, relancé → 200, avec une pause (Entrée) entre chaque étape.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\demo-openfeign.ps1 -AzizContainers location-voitures-reservation-service-1
+```
+
+`-AzizContainers` = le ou les conteneurs de reservation-service à arrêter puis relancer ; `-Auto` enchaîne sans pause.
+
 ## Tests
 
 ```powershell
