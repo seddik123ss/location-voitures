@@ -1,0 +1,92 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "location-voitures/reservation-service",
+    "type": "project",
+    "description": "Service des réservations (location de voitures, ESPRIT) : Laravel, port 8103, RENTAL-RESERVATION",
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "darkaonline/l5-swagger": "^11.3",
+        "firebase/php-jwt": "^7.0",
+        "laravel/framework": "^12.0",
+        "laravel/tinker": "^2.10.1",
+        "php-amqplib/php-amqplib": "^3.7"
+    },
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "laravel/pail": "^1.2.2",
+        "laravel/pint": "^1.24",
+        "laravel/sail": "^1.41",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6",
+        "phpunit/phpunit": "^11.5.50"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/",
+            "Rental\\Eureka\\": "../../shared/php-eureka/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": [
+            "@php artisan config:clear --ansi",
+            "@php artisan test"
+        ],
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "pre-package-uninstall": [
+            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+        ],
+        "serve": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan serve --host=0.0.0.0 --port=8103"
+        ],
+        "eureka": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan eureka:run"
+        ],
+        "consume": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan rabbitmq:consume"
+        ],
+        "openapi:dump": [
+            "@php artisan l5-swagger:generate",
+            "@php scripts/openapi-dump.php"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

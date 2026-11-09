@@ -1,11 +1,11 @@
 import { Routes } from '@angular/router';
-import { Placeholder } from '../placeholder';
+import { ReservationDetail } from './reservation-detail';
+import { ReservationList } from './reservation-list';
+import { ReservationNew } from './reservation-new';
 
-/**
- * Routes du module Réservations (Aziz).
- * Remplacer la page provisoire par les composants du module, par exemple :
- *   { path: '', component: MaListe }, { path: ':id', component: MonDetail }
- */
+/** Routes du module Réservations (Aziz) : liste, réservation d'un véhicule, détail. */
 export const RESERVATIONS_ROUTES: Routes = [
-  { path: '', component: Placeholder, data: { title: 'Réservations', owner: 'Aziz', module: 'reservations' } },
+  { path: '', component: ReservationList, title: 'Réservations' },
+  { path: 'new', component: ReservationNew, title: 'Réserver un véhicule' },
+  { path: ':id', component: ReservationDetail, title: 'Réservation' },
 ];

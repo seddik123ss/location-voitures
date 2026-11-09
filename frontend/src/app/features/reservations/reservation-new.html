@@ -1,0 +1,159 @@
+<a class="back" routerLink="..">← Réservations</a>
+<h1>Réserver un véhicule</h1>
+<p class="sub">Choisissez le véhicule et les dates : le prix est calculé avant la confirmation.</p>
+
+@if (error()) {
+  <div class="alert">{{ error() }}</div>
+}
+
+<form class="card form" (ngSubmit)="askQuote()">
+  @if (staff) {
+    <label>
+      Client (UUID)
+      <input
+        name="userId"
+        placeholder="ex. f4d1bab3-468d-428d-b02c-b44341430bfd"
+        [ngModel]="userId()"
+        (ngModelChange)="userId.set($event); changed()"
+      />
+      @if (userId() && fieldError('userId')) {
+        <span class="invalid">{{ fieldError('userId') }}</span>
+      } @else {
+        <span class="hint">Vous réservez pour un client : son permis sera vérifié.</span>
+      }
+    </label>
+  }
+
+  <label>
+    Véhicule
+    <select
+      name="vehicle"
+      [ngModel]="vehicleChoice()"
+      (ngModelChange)="vehicleChoice.set($event); changed()"
+    >
+      @for (v of vehicles; track v.id) {
+        <option [value]="v.id">{{ v.label }} — {{ v.category }}, agence {{ v.agency }}</option>
+      }
+      <option [value]="other">Autre véhicule (UUID)…</option>
+    </select>
+  </label>
+  @if (vehicleChoice() === other) {
+    <label>
+      UUID du véhicule
+      <input
+        name="customVehicleId"
+        [ngModel]="customVehicleId()"
+        (ngModelChange)="customVehicleId.set($event); changed()"
+      />
+    </label>
+  }
+  @if (
+    fields()['vehicleId'] ||
+    (vehicleChoice() === other && customVehicleId() && fieldError('vehicleId'))
+  ) {
+    <span class="invalid">{{ fieldError('vehicleId') }}</span>
+  }
+
+  <div class="row">
+    <label>
+      Départ
+      <input
+        type="date"
+        name="startDate"
+        [min]="minDate"
+        [ngModel]="startDate()"
+        (ngModelChange)="startDate.set($event); changed()"
+      />
+      @if (fieldError('startDate')) {
+        <span class="invalid">{{ fieldError('startDate') }}</span>
+      }
+    </label>
+    <label>
+      Retour
+      <input
+        type="date"
+        name="endDate"
+        [min]="startDate() || minDate"
+        [ngModel]="endDate()"
+        (ngModelChange)="endDate.set($event); changed()"
+      />
+      @if (fieldError('endDate')) {
+        <span class="invalid">{{ fieldError('endDate') }}</span>
+      }
+    </label>
+    <label>
+      Agence de retour
+      <select
+        name="returnAgencyId"
+        [ngModel]="returnAgencyId()"
+        (ngModelChange)="returnAgencyId.set($event); changed()"
+      >
+        <option value="">Même agence que le départ</option>
+        @for (a of agencies; track a.id) {
+          <option [value]="a.id">{{ a.name }}</option>
+        }
+      </select>
+    </label>
+  </div>
+  <p class="hint">
+    Le véhicule se récupère dans son agence. Un jour de location = de la date de départ à la date de
+    retour.
+  </p>
+
+  <div class="actions">
+    <button class="btn" type="submit" [disabled]="!valid() || busy()">Voir le prix</button>
+  </div>
+</form>
+
+@if (quote(); as q) {
+  <div class="card quote" [class.stale]="!quoteIsCurrent()">
+    <h2>Prix de la location</h2>
+    @if (!quoteIsCurrent()) {
+      <p class="hint">Vous avez modifié la demande : recalculez le prix avant de réserver.</p>
+    }
+    <dl class="grid">
+      <div>
+        <dt>Catégorie</dt>
+        <dd>{{ q.categoryName }}</dd>
+      </div>
+      <div>
+        <dt>Durée</dt>
+        <dd>
+          {{ q.days }} jour{{ q.days > 1 ? 's' : '' }} ×
+          {{ q.dailyRate | currency: q.currency : 'code' : '1.3-3' }}
+        </dd>
+      </div>
+      <div>
+        <dt>Prix de la location</dt>
+        <dd class="total amount">{{ q.totalPrice | currency: q.currency : 'code' : '1.3-3' }}</dd>
+      </div>
+      <div>
+        <dt>Caution (rendue au retour)</dt>
+        <dd class="amount">{{ q.depositAmount | currency: q.currency : 'code' : '1.3-3' }}</dd>
+      </div>
+    </dl>
+    @if (q.suggestedPrice; as s) {
+      <div class="alert info">
+        Prix conseillé par notre modèle pour ces dates :
+        <strong class="amount">{{ s.totalPrice | currency: q.currency : 'code' : '1.3-3' }}</strong>
+        ({{ s.dailyPrice | currency: q.currency : 'code' : '1.3-3' }} par jour, entre
+        {{ s.lowerBound | number: '1.3-3' }} et {{ s.upperBound | number: '1.3-3' }}). Le prix
+        facturé reste le tarif de la catégorie.
+      </div>
+    } @else {
+      <p class="hint">
+        Prix conseillé indisponible pour le moment : le tarif de la catégorie s'applique.
+      </p>
+    }
+    <div class="actions">
+      <button
+        class="btn primary"
+        type="button"
+        [disabled]="!quoteIsCurrent() || busy()"
+        (click)="book()"
+      >
+        Réserver pour {{ q.totalPrice | currency: q.currency : 'code' : '1.3-3' }}
+      </button>
+    </div>
+  </div>
+}
