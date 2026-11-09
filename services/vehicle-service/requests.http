@@ -1,0 +1,31 @@
+@base = http://localhost:8102
+
+### 1. Liste des catégories (attendu : 200, total 3)
+GET {{base}}/api/categories
+
+### 2. Créer une catégorie (attendu : 201 + en-tête Location)
+POST {{base}}/api/categories
+Content-Type: application/json
+
+{ "name": "Test", "dailyRate": 50, "deposit": 200 }
+
+### 3. Même nom une deuxième fois (attendu : 409)
+POST {{base}}/api/categories
+Content-Type: application/json
+
+{ "name": "Test", "dailyRate": 50, "deposit": 200 }
+
+### 4. Données invalides (attendu : 400 avec details)
+POST {{base}}/api/categories
+Content-Type: application/json
+
+{ "name": "", "dailyRate": -5 }
+
+### 5. Supprimer la catégorie SUV, utilisée par des véhicules (attendu : 409)
+DELETE {{base}}/api/categories/a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c
+
+### 6. Liste des agences (attendu : 200, total 2)
+GET {{base}}/api/agencies
+
+### 7. Agence inexistante (attendu : 404)
+GET {{base}}/api/agencies/00000000-0000-4000-8000-000000000000

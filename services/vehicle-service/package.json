@@ -2,18 +2,18 @@
   "name": "vehicle-service",
   "version": "0.1.0",
   "private": true,
-"scripts": {
-  "dev": "next dev -H 0.0.0.0 -p 8102",
-  "build": "next build",
-  "start": "next start -H 0.0.0.0 -p 8102",
-  "seed": "prisma db seed"
-
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 8102",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 8102",
+    "seed": "prisma db seed"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "next": "^16.4.5",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
@@ -22,7 +22,7 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
-    "prisma": {
+  "prisma": {
     "seed": "tsx prisma/seed.ts"
   }
 }
