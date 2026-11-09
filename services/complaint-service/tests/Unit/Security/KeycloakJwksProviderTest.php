@@ -46,6 +46,20 @@ final class KeycloakJwksProviderTest extends TestCase
         self::assertSame(['GET ' . self::CERTS_URL], $urls);
     }
 
+    public function testExplicitJwksUrlWinsOverIssuer(): void
+    {
+        $urls = [];
+        $http = new MockHttpClient(static function (string $method, string $url) use (&$urls): MockResponse {
+            $urls[] = $url;
+
+            return self::jwks('k1');
+        });
+        $jwks = 'http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs';
+
+        (new KeycloakJwksProvider($http, new ArrayAdapter(), new NullLogger(), TestJwt::ISSUER, $jwks))->keys();
+        self::assertSame([$jwks], $urls);
+    }
+
     public function testRefreshReloadsKeysAtMostOncePerMinute(): void
     {
         $http = new MockHttpClient([self::jwks('k1'), self::jwks('k1', 'k2')]);

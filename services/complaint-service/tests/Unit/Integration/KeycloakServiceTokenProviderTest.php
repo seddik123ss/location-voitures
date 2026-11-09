@@ -35,6 +35,20 @@ final class KeycloakServiceTokenProviderTest extends IntegrationTestCase
         self::assertSame('jwt-2', $provider->token(), 'Nouveau jeton après invalidate()');
     }
 
+    public function testExplicitTokenUrlWinsOverIssuer(): void
+    {
+        $urls = [];
+        $http = new MockHttpClient(function (string $method, string $url) use (&$urls) {
+            $urls[] = $url;
+
+            return new MockResponse(json_encode(['access_token' => 'jwt', 'expires_in' => 300]), ['http_code' => 200]);
+        });
+        $tokenUrl = 'http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token';
+
+        (new KeycloakServiceTokenProvider($http, new ArrayAdapter(), new NullLogger(), self::ISSUER, 'complaint-service', 's3cret', $tokenUrl))->token();
+        self::assertSame([$tokenUrl], $urls);
+    }
+
     public function testKeycloakUnreachableIs503(): void
     {
         $provider = $this->provider(new MockHttpClient(new MockResponse('', ['error' => 'Connection refused'])));

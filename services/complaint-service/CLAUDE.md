@@ -45,7 +45,14 @@ PowerShell 5.1 mangles double quotes inside native-command arguments, so `php -r
 
 ## Configuration
 
-The root `.gitignore` ignores `.env`, so this service versions `.env.dist` (Symfony loads it when `.env` is absent). Local overrides go in `.env.local` (ignored). Env vars follow the conventions: `SERVICE_PORT`, `SERVICE_HOST=host.docker.internal`, `DATABASE_URL`, `EUREKA_URL`, `KEYCLOAK_ISSUER`, `KEYCLOAK_CLIENT_ID=complaint-service`, `KEYCLOAK_CLIENT_SECRET` (in `infra/keycloak/location-voitures-realm.json`), `RABBITMQ_URL`.
+The root `.gitignore` ignores `.env`, so this service versions `.env.dist` (Symfony loads it when `.env` is absent). Local overrides go in `.env.local` (ignored). Env vars follow the conventions: `SERVICE_PORT`, `SERVICE_HOST=host.docker.internal`, `DATABASE_URL`, `EUREKA_URL`, `KEYCLOAK_ISSUER`, `KEYCLOAK_CLIENT_ID=complaint-service`, `KEYCLOAK_CLIENT_SECRET` (in `infra/keycloak/location-voitures-realm.json`), `RABBITMQ_URL` (not used yet: no events are published or consumed). Two extra vars, empty by default (then derived from `KEYCLOAK_ISSUER`): `KEYCLOAK_JWKS` (JWKS URL, `KeycloakJwksProvider`) and `KEYCLOAK_TOKEN_URL` (client-credentials URL, `KeycloakServiceTokenProvider`). Docker sets them to `http://keycloak:8080/...` while the issuer stays `http://localhost:8180/...`.
+
+## Docker
+
+- `Dockerfile`: `php:8.5-cli-alpine` + `pdo_mysql`, `pcntl` (curl is built in), `composer install --no-dev`, `APP_ENV=prod`, cache warmed up, runs as `www-data`. `docker-entrypoint.sh` (kept LF by `.gitattributes`): `serve` (default) runs migrations with retries until MySQL answers, then `php -S 0.0.0.0:$SERVICE_PORT -t public` with `PHP_CLI_SERVER_WORKERS=4`; any other command is exec'd as is.
+- `shared/php-eureka` is outside the build context: it comes in through the named build context `shared` (`additional_contexts` in compose; by hand `docker build --build-context shared=../../shared .`). The app lives in `/srv/services/complaint-service` so the PSR-4 path `../../shared/php-eureka/src` still resolves.
+- `infra/docker-compose.yml`, profile `services` (plain `docker compose up -d` stays infra-only): `complaint-service` (port 8106, healthcheck on `/health`) and `complaint-eureka` (same image, `php bin/console app:eureka:run`, starts once the web container is healthy; `docker stop` deregisters thanks to pcntl). Secrets come from `infra/.env`: `COMPLAINT_KEYCLOAK_CLIENT_SECRET`, `COMPLAINT_APP_SECRET`, `COMPLAINT_LOOKUP_MODE` (see `.env.example`).
+- Stop both containers before `composer serve`, since they share port 8106: `docker compose --profile services stop complaint-service complaint-eureka`.
 
 ## Domain model
 

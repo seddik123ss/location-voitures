@@ -12,6 +12,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
  * Client credentials auprès de Keycloak (docs/internal-api.md), jeton gardé en cache jusqu'à 30 s avant son expiration.
+ * Adresse : KEYCLOAK_TOKEN_URL si renseignée (Docker : http://keycloak:8080/...), sinon {issuer}/protocol/openid-connect/token.
  * Le cache (cache.app, sur disque) est partagé entre les requêtes : un seul appel à Keycloak toutes les ~4 min 30.
  */
 final class KeycloakServiceTokenProvider implements ServiceTokenProvider
@@ -26,6 +27,7 @@ final class KeycloakServiceTokenProvider implements ServiceTokenProvider
         #[Autowire(env: 'KEYCLOAK_ISSUER')] private readonly string $issuer,
         #[Autowire(env: 'KEYCLOAK_CLIENT_ID')] private readonly string $clientId,
         #[Autowire(env: 'KEYCLOAK_CLIENT_SECRET')] private readonly string $clientSecret,
+        #[Autowire(env: 'KEYCLOAK_TOKEN_URL')] private readonly string $tokenUrl = '',
     ) {
     }
 
@@ -50,7 +52,7 @@ final class KeycloakServiceTokenProvider implements ServiceTokenProvider
         if ($this->clientSecret === '') {
             throw new \LogicException('KEYCLOAK_CLIENT_SECRET est vide : renseigner le secret du client Keycloak complaint-service (voir README).');
         }
-        $url = rtrim($this->issuer, '/') . '/protocol/openid-connect/token';
+        $url = $this->tokenUrl !== '' ? $this->tokenUrl : rtrim($this->issuer, '/') . '/protocol/openid-connect/token';
 
         try {
             $response = $this->httpClient->request('POST', $url, [

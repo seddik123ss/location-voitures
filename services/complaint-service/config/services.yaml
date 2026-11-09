@@ -14,6 +14,10 @@ parameters:
     env(KEYCLOAK_ISSUER): 'http://localhost:8180/realms/location-voitures'
     env(KEYCLOAK_CLIENT_ID): 'complaint-service'
     env(KEYCLOAK_CLIENT_SECRET): ''
+    # Adresses Keycloak vues depuis le service, si elles diffèrent de l'émetteur (Docker : http://keycloak:8080/...).
+    # Vides : déduites de KEYCLOAK_ISSUER.
+    env(KEYCLOAK_JWKS): ''
+    env(KEYCLOAK_TOKEN_URL): ''
     # demo (par défaut tant que reservation-service et contract-service n'ont pas leurs routes /internal) :
     # données de docs/demo-ids.md ; eureka : appels HTTP aux autres services (voir App\Integration\LookupFactory).
     env(LOOKUP_MODE): 'demo'

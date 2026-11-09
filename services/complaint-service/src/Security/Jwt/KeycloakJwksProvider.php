@@ -12,7 +12,8 @@ use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
- * Clés JWKS du realm ({issuer}/protocol/openid-connect/certs), gardées en cache (cache.app) pendant une heure.
+ * Clés JWKS du realm, gardées en cache (cache.app) pendant une heure. Adresse : KEYCLOAK_JWKS si renseignée (en Docker,
+ * http://keycloak:8080/... alors que l'émetteur reste http://localhost:8180/...), sinon {issuer}/protocol/openid-connect/certs.
  * Seules les clés RSA de signature (use = sig, RS256) sont retenues : Keycloak publie aussi une clé de chiffrement RSA-OAEP.
  * Un rechargement forcé (kid inconnu) est limité à un par minute, pour qu'un token forgé ne fasse pas appeler Keycloak à chaque requête.
  */
@@ -26,12 +27,13 @@ final class KeycloakJwksProvider implements KeySetProvider
         private readonly CacheInterface $cache,
         private readonly LoggerInterface $logger,
         #[Autowire(env: 'KEYCLOAK_ISSUER')] private readonly string $issuer,
+        #[Autowire(env: 'KEYCLOAK_JWKS')] private readonly string $jwksUrl = '',
     ) {
     }
 
     public function keys(bool $refresh = false): array
     {
-        $key = 'keycloak_jwks_' . md5($this->issuer);
+        $key = 'keycloak_jwks_' . md5($this->issuer . '|' . $this->jwksUrl);
         if ($refresh && $this->mayRefresh($key)) {
             $this->cache->delete($key);
         }
@@ -66,7 +68,7 @@ final class KeycloakJwksProvider implements KeySetProvider
     /** @return list<array<string, mixed>> clés de signature au format JWK */
     private function fetch(): array
     {
-        $url = rtrim($this->issuer, '/') . '/protocol/openid-connect/certs';
+        $url = $this->jwksUrl !== '' ? $this->jwksUrl : rtrim($this->issuer, '/') . '/protocol/openid-connect/certs';
         try {
             $response = $this->httpClient->request('GET', $url, ['timeout' => 3, 'max_duration' => 5]);
             $status = $response->getStatusCode();
