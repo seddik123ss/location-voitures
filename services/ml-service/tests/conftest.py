@@ -22,6 +22,8 @@ TEST_DB_URL = os.environ.get("TEST_DB_URL", "postgresql+psycopg://ml_svc:ml_pwd@
 if "test" not in TEST_DB_URL.rsplit("/", 1)[-1]:
     raise RuntimeError(f"Sécurité : la base de test doit contenir « test » dans son nom ({TEST_DB_URL})")
 os.environ["DB_URL"] = TEST_DB_URL
+# Les tests ne s'inscrivent jamais dans Eureka (le TestClient déclenche le démarrage de l'application)
+os.environ["EUREKA_ENABLED"] = "false"
 
 from alembic import command  # noqa: E402  (imports après le réglage de DB_URL, volontairement)
 from alembic.config import Config  # noqa: E402

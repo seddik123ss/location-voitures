@@ -1,12 +1,28 @@
-"""Point d'entrée du service. Lancement : uvicorn main:app --port 8107"""
+"""Point d'entrée du service. Lancement : uvicorn main:app --host 0.0.0.0 --port 8107
+(0.0.0.0 obligatoire pour que la Gateway, dans Docker, puisse joindre le service : docs/conventions.md)"""
+import logging
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
 from app import api_docs, internal_routes, public_routes
+from app.eureka_client import register_in_eureka, unregister_from_eureka
 from app.error_handlers import register_error_handlers
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Avant « yield » : au démarrage du serveur. Après : à son arrêt."""
+    await register_in_eureka()
+    yield
+    await unregister_from_eureka()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="ml-service",
     version="0.1.0",
     description=(

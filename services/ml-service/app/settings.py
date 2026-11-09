@@ -17,8 +17,9 @@ class Settings(BaseSettings):
     service_host: str = "host.docker.internal"
     db_url: str = "postgresql+psycopg://ml_svc:ml_pwd@localhost:5432/ml_db"
 
-    # Pour plus tard (intégrations)
+    # Intégrations
     eureka_url: str = "http://localhost:8761/eureka"
+    eureka_enabled: bool = True          # false dans les tests : pas d'inscription dans Eureka
     keycloak_issuer: str = "http://localhost:8180/realms/location-voitures"
     keycloak_client_id: str = "ml-service"
     keycloak_client_secret: str = ""
