@@ -142,6 +142,38 @@ class MessageProcessorTest extends TestCase
         $this->assertSame(Outcome::DEAD_LETTER, $this->processor->process(self::CONTRACTS, $body, false));
         $this->assertSame(ReservationStatus::PENDING, $this->statusOf(DemoIds::R_PENDING));
         $this->assertSame(0, ProcessedEvent::query()->count());
+
+        Reservation::query()->whereKey(DemoIds::R_PENDING)->update(['status' => ReservationStatus::CANCELLED]);
+        $body = self::example('ContractClosed', ['reservationId' => DemoIds::R_PENDING], ['eventId' => (string) Str::uuid()]);
+        $this->assertSame(Outcome::DEAD_LETTER, $this->processor->process(self::CONTRACTS, $body, false));
+        $this->assertSame(ReservationStatus::CANCELLED, $this->statusOf(DemoIds::R_PENDING));
+        $this->assertSame([], $this->events->published);
+    }
+
+    public function test_contrat_cloture_doublon_d_event_id_ignore(): void
+    {
+        // Procédure de test de Rania : ContractClosed.json avec reservationId = r-confirmed, envoyé deux fois.
+        $body = self::example('ContractClosed', ['reservationId' => DemoIds::R_CONFIRMED]);
+
+        $this->assertSame(Outcome::ACK, $this->processor->process(self::CONTRACTS, $body, false));
+        $this->assertSame(Outcome::ACK, $this->processor->process(self::CONTRACTS, $body, true));
+
+        $this->assertStringContainsString('déjà traité', $this->processor->summary);
+        $this->assertSame(ReservationStatus::COMPLETED, $this->statusOf(DemoIds::R_CONFIRMED));
+        $this->assertCount(4, Reservation::query()->find(DemoIds::R_CONFIRMED)->statusHistory); // pas de lignes en double
+        $this->assertSame(['ReservationCompleted'], $this->events->types()); // un seul message vers ml-service
+        $this->assertSame('CONFIRMED -> ONGOING -> COMPLETED', ProcessedEvent::query()->find('955aea6d-bb69-4b51-81b1-a2f025d2ff35')->outcome);
+    }
+
+    public function test_contrat_cloture_reservation_inconnue_dlq(): void
+    {
+        $body = self::example('ContractClosed', ['reservationId' => '00000000-0000-4000-8000-000000000000'], ['eventId' => (string) Str::uuid()]);
+
+        $this->assertSame(Outcome::DEAD_LETTER, $this->processor->process(self::CONTRACTS, $body, false));
+        $this->assertStringContainsString('reservation.contract_closed.dlq', $this->processor->summary);
+        $this->assertStringContainsString('inconnue', $this->processor->summary);
+        $this->assertSame(0, ProcessedEvent::query()->count());
+        $this->assertSame([], $this->events->published);
     }
 
     // ---------------------------------------------------------------- messages invalides et erreurs
