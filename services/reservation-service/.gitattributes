@@ -9,3 +9,6 @@
 /.github export-ignore
 CHANGELOG.md export-ignore
 .styleci.yml export-ignore
+
+# Script exécuté par /bin/sh dans le conteneur : toujours en LF, même après un checkout sous Windows.
+*.sh text eol=lf

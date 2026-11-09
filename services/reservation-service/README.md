@@ -23,6 +23,7 @@ Conventions communes : `docs/conventions.md`, `docs/internal-api.md`, `docs/even
 ## Sommaire
 
 - [Lancer en local](#lancer-en-local)
+- [Lancer en Docker](#lancer-en-docker)
 - [Endpoints](#endpoints)
 - [Règles métier et codes de réponse](#règles-métier-et-codes-de-réponse)
 - [Messages RabbitMQ](#messages-rabbitmq)
@@ -73,6 +74,82 @@ composer consume    # consommateur RabbitMQ (reservation.payment_succeeded, rese
 
 Vérifier : `curl http://localhost:8103/health` → `{"status":"UP"}`, et RENTAL-RESERVATION UP sur http://localhost:8761.
 Le script `scripts/test-internal.ps1` appelle les routes `/internal` avec un vrai token Keycloak (200, 401, 403, 404).
+
+## Lancer en Docker
+
+Une image (`Dockerfile`, PHP 8.5, extensions `pdo_mysql`, `sockets`, `bcmath`, `pcntl`), trois conteneurs :
+
+| Conteneur | Commande | Rôle |
+| --- | --- | --- |
+| `reservation-service` | `serve` (par défaut) | migrations (en attendant MySQL), données de démo si la base est vide, API sur `0.0.0.0:8103` avec 4 processus |
+| `reservation-eureka` | `php artisan eureka:run` | enregistrement RENTAL-RESERVATION ; `docker stop` le retire d'Eureka |
+| `reservation-consumer` | `php artisan rabbitmq:consume` | consommateur RabbitMQ ; `docker stop` l'arrête après le message en cours |
+
+Le client Eureka partagé (`shared/php-eureka`) est hors du dossier du service : il arrive par le contexte de build nommé `shared`.
+Construire à la main, depuis `services/reservation-service` :
+
+```
+docker build --build-context shared=../../shared -t location-voitures/reservation-service .
+```
+
+Bloc à ajouter dans `infra/docker-compose.yml` (profil `services`, comme complaint-service), et la ligne
+`RESERVATION_KEYCLOAK_CLIENT_SECRET=` (secret de dev du client `reservation-service`) dans `infra/.env.example` :
+
+```yaml
+x-reservation-env: &reservation-env
+  DB_CONNECTION: mysql
+  DB_URL: mysql://reservation_svc:reservation_pwd@mysql:3306/reservation_db
+  EUREKA_URL: http://eureka:8761/eureka
+  SERVICE_HOST: host.docker.internal
+  SERVICE_PORT: "8103"
+  # L'émetteur des tokens reste localhost:8180 ; le conteneur joint Keycloak par keycloak:8080.
+  KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+  KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+  KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
+  KEYCLOAK_CLIENT_ID: reservation-service
+  KEYCLOAK_CLIENT_SECRET: ${RESERVATION_KEYCLOAK_CLIENT_SECRET:-}
+  RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+  LOOKUP_MODE: ${RESERVATION_LOOKUP_MODE:-demo}
+
+services:
+  reservation-service:
+    profiles: [services]
+    build:
+      context: ../services/reservation-service
+      additional_contexts:
+        shared: ../shared
+    image: location-voitures/reservation-service
+    ports: ["8103:8103"]
+    environment: *reservation-env
+    depends_on: [mysql, eureka, keycloak, rabbitmq]
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8103/health') === false ? 1 : 0);"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+  reservation-eureka:
+    profiles: [services]
+    image: location-voitures/reservation-service
+    command: ["php", "artisan", "eureka:run"]
+    environment: *reservation-env
+    depends_on:
+      reservation-service:
+        condition: service_healthy
+    stop_grace_period: 15s
+  reservation-consumer:
+    profiles: [services]
+    image: location-voitures/reservation-service
+    command: ["php", "artisan", "rabbitmq:consume"]
+    environment: *reservation-env
+    depends_on:
+      reservation-service:
+        condition: service_healthy
+    stop_grace_period: 15s
+```
+
+Puis, dans `infra/` : `docker compose --profile services up -d --build reservation-service reservation-eureka reservation-consumer`.
+Arrêter ces conteneurs avant `composer serve` en local : ils utilisent le même port 8103.
 
 ## Endpoints
 
