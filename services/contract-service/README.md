@@ -157,13 +157,18 @@ cd services\contract-service
 dotnet test
 ```
 
-25 tests xUnit, sans Docker (base InMemory, RabbitMQ et Keycloak remplacés) :
+34 tests xUnit, sans Docker (base InMemory, RabbitMQ et Keycloak remplacés) :
 
 - `ContractsApiTests` : CRUD, pagination, 400 / 404 / 409 / 422, Location, 401 / 403, un CLIENT ne voit que ses contrats, `/internal` réservé au rôle INTERNAL, messages RabbitMQ publiés ;
-- `FeeCalculatorTests` : calcul des frais (dont le cas de `docs/events/ReturnSettled.json`).
+- `FeeCalculatorTests` : calcul des frais (dont le cas de `docs/events/ReturnSettled.json`) ;
+- `FakeSelectionTests` : réglage `USE_FAKE_SERVICES` (tous, aucun, liste, nom inconnu refusé).
 
 Vérifié aussi avec l'infrastructure réelle : enregistrement Eureka, tokens Keycloak (client1, agent1, compte de service),
 messages reçus dans les files RabbitMQ, 503 et annulation quand RabbitMQ est arrêté.
+
+Test d'intégration avec les sept services réels (`USE_FAKE_SERVICES=false`), via la Gateway : réservation → paiement de la location
+(réservation CONFIRMED) → paiement de la caution → remise des clés (véhicule RENTED) → retour (véhicule AVAILABLE, frais créés dans
+payment-service, caution libérée, réservation COMPLETED).
 
 ## Mettre à jour la doc OpenAPI
 
