@@ -76,7 +76,12 @@ final class ApiExceptionListener
         if ($status === 403) {
             $message = $e instanceof \Throwable ? $e->getMessage() : '';
 
-            return ApiResponse::error(403, $message !== '' && $message !== 'Access Denied.' ? $message : 'Accès refusé', [], $headers);
+            if (str_starts_with($message, 'Access Denied.') && str_contains($message, "doesn't have any of")) {
+                // access_control de /api : aucun rôle d'utilisateur dans le token.
+                return ApiResponse::error(403, 'Accès refusé : rôle CLIENT, AGENT ou ADMIN requis', [], $headers);
+            }
+
+            return ApiResponse::error(403, $message !== '' && !str_starts_with($message, 'Access Denied.') ? $message : 'Accès refusé', [], $headers);
         }
 
         return ApiResponse::error($status, $e instanceof \Throwable && $e->getMessage() !== '' ? $e->getMessage() : 'Erreur', [], $headers);

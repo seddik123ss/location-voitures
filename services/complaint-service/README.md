@@ -33,8 +33,32 @@ refait la même boucle (enregistrement, battement toutes les 30 s, nouvel enregi
 le retrait sur Ctrl+C / SIGTERM. **À faire plus tard, avec Aziz** (reservation-service utilise aussi le runner partagé) : ajouter
 un arrêt propre à `EurekaRunner`, puis faire revenir cette commande au runner partagé.
 
-Vérification via la Gateway (http://localhost:8088) : `GET /api/complaints` sans token donne 401 (Gateway). Avec un token Keycloak
-**et**, tant que l'étape Sécurité n'est pas faite, les en-têtes `X-Dev-User-Id` / `X-Dev-Roles`, on obtient 200.
+Vérification via la Gateway (http://localhost:8088) : `GET /api/complaints` sans token donne 401 (Gateway). Avec un token Keycloak,
+on obtient 200 (voir « Sécurité »).
+
+## Sécurité
+
+Chaque requête sur `/api/**` porte un access token Keycloak : `Authorization: Bearer <token>` (realm `location-voitures`).
+Le service le vérifie lui-même, en dev comme en prod :
+
+- signature RS256 avec les clés publiques du realm (`{KEYCLOAK_ISSUER}/protocol/openid-connect/certs`, gardées en cache une heure,
+  rechargées si le token cite une clé inconnue) ;
+- émetteur = `KEYCLOAK_ISSUER`, expiration obligatoire (10 s de tolérance) ;
+- l'appelant est le `sub` ; ses rôles sont ceux de la claim `roles` parmi CLIENT, AGENT, ADMIN (les rôles par défaut de Keycloak sont ignorés).
+
+Réponses : token absent, invalide, mal signé, d'un autre émetteur ou expiré → **401** au format d'erreur commun ; token sans rôle
+CLIENT, AGENT ou ADMIN (par exemple un compte de service INTERNAL) → **403** ; Keycloak injoignable au premier chargement des clés → **503**.
+`/health` et `/api/doc` restent publics, même avec un token invalide.
+
+Obtenir un token pour essayer (Git Bash ; secret du client `gateway` dans `infra/keycloak/location-voitures-realm.json`) :
+
+```
+curl -s -X POST http://localhost:8180/realms/location-voitures/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=gateway -d client_secret=<secret> -d username=client1 -d password=client1_pwd
+curl -s http://localhost:8088/api/complaints -H "Authorization: Bearer <access_token>"
+```
+
+Les en-têtes `X-Dev-User-Id` / `X-Dev-Roles` ne fonctionnent plus qu'en test (`when@test`).
 
 ## Appels aux autres services
 
@@ -87,7 +111,8 @@ Chaque test s'exécute dans une transaction annulée à la fin (dama/doctrine-te
 Une fois la base de test créée, on peut lancer un seul test : `php bin/phpunit --filter ChangeStatusTest`.
 Pour recréer seulement la base de test : `composer test:db`.
 
-En test, l'appelant est donné par les en-têtes de développement `X-Dev-User-Id` et `X-Dev-Roles`.
+En test, l'appelant est donné par les en-têtes de développement `X-Dev-User-Id` et `X-Dev-Roles`. `JwtAuthenticationTest` utilise
+de vrais JWT signés par une clé de test (`tests/Fixtures/jwt`, sans lien avec Keycloak).
 
 ### Droits MySQL sur la base de test
 

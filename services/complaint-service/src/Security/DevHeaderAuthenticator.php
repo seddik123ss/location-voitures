@@ -15,9 +15,10 @@ use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPasspor
 use Symfony\Component\Uid\Uuid;
 
 /**
- * DEV UNIQUEMENT (activé sous when@dev dans config/packages/security.yaml).
+ * TESTS UNIQUEMENT (activé sous when@test dans config/packages/security.yaml) : les tests fonctionnels donnent
+ * l'appelant sans signer de token. En dev et en prod, seul JwtAuthenticator est actif.
  * X-Dev-User-Id: <uuid>      X-Dev-Roles: CLIENT | AGENT | ADMIN (séparés par des virgules, CLIENT par défaut)
- * Sera remplacé par l'authenticator JWT Keycloak, qui produira le même ApiUser.
+ * Produit le même ApiUser que JwtAuthenticator.
  */
 final class DevHeaderAuthenticator extends AbstractAuthenticator
 {

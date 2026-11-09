@@ -34,7 +34,7 @@ Tests:
 - PHPUnit fails on deprecations, notices and warnings (`phpunit.dist.xml`).
 - The test DB is `complaint_db_test`: `.env.test` sets `DATABASE_URL`, because `.env.local` isn't loaded in test, and Doctrine adds the `_test` suffix.
 - dama/doctrine-test-bundle wraps each test in a transaction that is rolled back, so every test starts from the fixtures. Never rely on test order; the suite passes with `--order-by=random`.
-- Functional tests extend `tests/Functional/ApiTestCase.php`. Use `request($method, $uri, self::CLIENT2, $body)` and `assertError($status, 'CONFLICT', 'message part', ['field'])`. The dev authenticator is also active under `when@test`.
+- Functional tests extend `tests/Functional/ApiTestCase.php`. Use `request($method, $uri, self::CLIENT2, $body)` and `assertError($status, 'CONFLICT', 'message part', ['field'])`. The dev-header authenticator is active only under `when@test`. For real JWTs, see `JwtAuthenticationTest` and `tests/Support/TestJwt`.
 - `complaint_svc` needs rights on `complaint_db%`: they are in `infra/mysql/init.sql`, and `scripts/grant-test-db.sql` grants them on an existing volume.
 
 API docs: Swagger UI at http://localhost:8106/api/doc, JSON at `/api/doc.json` (both public). After changing a route, a DTO or `config/packages/nelmio_api_doc.yaml`, regenerate the shared contract with `composer openapi:dump`, which writes `../../docs/openapi/complaint-service.yaml` in UTF-8 without BOM, with LF. Never use `nelmio:apidoc:dump > file` in PowerShell 5.1, because it writes UTF-16.
@@ -71,11 +71,17 @@ The root `.gitignore` ignores `.env`, so this service versions `.env.dist` (Symf
 - OpenAPI: response schemas (`ComplaintSummary`, `ComplaintDetail`, `ComplaintPage`, `Error`...), shared error responses (`#/components/responses/NotFound`...) and the security schemes (`bearerAuth`, plus `devUserId` / `devRoles` for dev) live in `config/packages/nelmio_api_doc.yaml`. Operations are described with `#[OA\Get]`, `#[OA\Post]`... on the controller methods. Swagger UI assets are served locally (`html_config.assets_mode: bundle`).
 - Every error goes through `App\EventListener\ApiExceptionListener` → `ApiResponse::error()`. Throw `App\Exception\ApiException` (factories `notFound`, `forbidden`, `conflict`, `unprocessable`, `badGateway`, `serviceUnavailable`), never build an error response in a controller.
 - Responses use `ApiResponse::json()` (unescaped UTF-8). Instants are formatted `Y-m-d\TH:i:s\Z`, and `Kernel::boot()` forces the UTC timezone.
-- Caller = `App\Security\ApiUser` (id + realm roles), injected with `#[CurrentUser]`. In dev it comes from `DevHeaderAuthenticator` (headers `X-Dev-User-Id: <uuid>`, `X-Dev-Roles: CLIENT|AGENT|ADMIN`), registered only under `when@dev` in `security.yaml`. In other environments there is no authenticator yet, so `/api/**` returns 401 until the JWT authenticator replaces it.
+- Caller = `App\Security\ApiUser` (id + realm roles), injected with `#[CurrentUser]`. It comes from `App\Security\JwtAuthenticator` in every environment:
+  - `Security\Jwt\KeycloakTokenDecoder` checks the RS256 signature (header must have `alg: RS256` + `kid`), `iss` = `KEYCLOAK_ISSUER`, `exp` (required, 10 s leeway), `typ` = Bearer if present, `sub` = UUID. Failures throw `Jwt\InvalidToken` → 401 with that message and `WWW-Authenticate: Bearer error="invalid_token"`.
+  - Keys come from `Jwt\KeySetProvider`: `KeycloakJwksProvider` (realm `/certs`, only `use=sig` RS256 keys, `cache.app` for 1 h, forced reload on unknown `kid` at most once a minute, Keycloak down → 503). Under `when@test`, `services.yaml` swaps in `tests/Support/TestKeySetProvider` (key in `tests/Fixtures/jwt/test-key.pem`; `tests/Support/TestJwt` signs tokens).
+  - Roles = claim `roles` ∩ `ApiUser::REALM_ROLES`. `access_control` requires ROLE_CLIENT/AGENT/ADMIN on `/api`, so a token with none of them (or INTERNAL only) is a 403; `ApiExceptionListener` turns that Symfony message into `Accès refusé : rôle CLIENT, AGENT ou ADMIN requis`.
+  - The firewall is stateless, and Symfony never makes a stateless firewall lazy. `JwtAuthenticator::supports()` therefore checks `security.access_map` itself and steps aside on PUBLIC_ACCESS routes, so `/health` and `/api/doc` ignore an invalid token.
+  - `DevHeaderAuthenticator` (headers `X-Dev-User-Id: <uuid>`, `X-Dev-Roles: CLIENT|AGENT|ADMIN`) is registered only under `when@test`, next to the JWT one.
 
-Example (Git Bash; PowerShell's `curl` is an alias for `Invoke-WebRequest`):
+Example (Git Bash; PowerShell's `curl` is an alias for `Invoke-WebRequest`). Get a token with the `gateway` client (secret in `infra/keycloak/location-voitures-realm.json`), user `client1` / `client1_pwd`:
 ```
-curl -s http://127.0.0.1:8106/api/complaints -H "X-Dev-User-Id: 611f32de-ce7b-4927-b1c4-d113b6479d59" -H "X-Dev-Roles: CLIENT"
+curl -s -X POST http://localhost:8180/realms/location-voitures/protocol/openid-connect/token -d grant_type=password -d client_id=gateway -d client_secret=<secret> -d username=client1 -d password=client1_pwd
+curl -s http://127.0.0.1:8106/api/complaints -H "Authorization: Bearer <access_token>"
 ```
 On Windows, send JSON bodies containing accents from a file (`--data-binary @file.json`): `curl.exe` arguments are not passed as UTF-8.
 

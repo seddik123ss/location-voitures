@@ -45,3 +45,12 @@ services:
         factory: ['@App\Integration\LookupFactory', 'reservations']
     App\Integration\ContractLookup:
         factory: ['@App\Integration\LookupFactory', 'contracts']
+
+    # Clés de signature des tokens Keycloak (JWKS du realm, en cache).
+    App\Security\Jwt\KeySetProvider: '@App\Security\Jwt\KeycloakJwksProvider'
+
+when@test:
+    services:
+        # Tests : tokens signés par la clé de tests/Fixtures/jwt, sans appel à Keycloak.
+        App\Security\Jwt\KeySetProvider:
+            class: App\Tests\Support\TestKeySetProvider

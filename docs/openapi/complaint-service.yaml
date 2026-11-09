@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: complaint-service
-  description: "Réclamations des clients de la plateforme de location de voitures (RENTAL-COMPLAINT, port 8106).\n\n**Rôles** (claim `roles` du token Keycloak, realm `location-voitures`) :\n- `CLIENT` : crée, consulte, modifie (tant que OPEN) et supprime (tant que OPEN) ses propres réclamations, écrit des messages ;\n- `AGENT` : consulte toutes les réclamations, change leur statut et leur priorité, écrit des messages ;\n- `ADMIN` : comme AGENT, et peut supprimer n'importe quelle réclamation.\n\n**Statuts** : OPEN → IN_PROGRESS | REJECTED ; IN_PROGRESS → RESOLVED | REJECTED | OPEN ;\nRESOLVED et REJECTED sont des états finaux (toute transition, tout message, tout changement de priorité → 409).\n\n**Ordre des contrôles** : le corps JSON est validé avant d'entrer dans le contrôleur. Un corps invalide renvoie donc\n**400 même si la réclamation n'existe pas** ; ensuite viennent 404 (réclamation introuvable), 403 (droits), puis 409 / 422 (règles métier).\n\n**Formats** (docs/conventions.md) : UUID v4 en chaîne, JSON en camelCase, instants ISO 8601 UTC,\npagination `?page=0&size=20` → `{items, page, size, total}`, erreurs `{status, error, message, details}`.\n\n**Authentification** : `Authorization: Bearer <JWT Keycloak>`. En environnement **dev uniquement**,\nles en-têtes `X-Dev-User-Id` et `X-Dev-Roles` remplacent le token (bouton Authorize → devUserId et devRoles).\n"
+  description: "Réclamations des clients de la plateforme de location de voitures (RENTAL-COMPLAINT, port 8106).\n\n**Rôles** (claim `roles` du token Keycloak, realm `location-voitures`) :\n- `CLIENT` : crée, consulte, modifie (tant que OPEN) et supprime (tant que OPEN) ses propres réclamations, écrit des messages ;\n- `AGENT` : consulte toutes les réclamations, change leur statut et leur priorité, écrit des messages ;\n- `ADMIN` : comme AGENT, et peut supprimer n'importe quelle réclamation.\n\n**Statuts** : OPEN → IN_PROGRESS | REJECTED ; IN_PROGRESS → RESOLVED | REJECTED | OPEN ;\nRESOLVED et REJECTED sont des états finaux (toute transition, tout message, tout changement de priorité → 409).\n\n**Ordre des contrôles** : le corps JSON est validé avant d'entrer dans le contrôleur. Un corps invalide renvoie donc\n**400 même si la réclamation n'existe pas** ; ensuite viennent 404 (réclamation introuvable), 403 (droits), puis 409 / 422 (règles métier).\n\n**Formats** (docs/conventions.md) : UUID v4 en chaîne, JSON en camelCase, instants ISO 8601 UTC,\npagination `?page=0&size=20` → `{items, page, size, total}`, erreurs `{status, error, message, details}`.\n\n**Authentification** : `Authorization: Bearer <access token Keycloak>` (realm location-voitures), bouton Authorize → bearerAuth.\nSignature vérifiée avec les clés du realm, émetteur et expiration contrôlés ; l'appelant est le `sub`, ses rôles\nla claim `roles`. Token absent, invalide ou expiré → 401 ; token sans rôle CLIENT, AGENT ou ADMIN → 403.\n"
   version: 1.0.0
 servers:
   -
@@ -895,20 +895,29 @@ components:
                 error: BAD_REQUEST
                 message: 'Corps JSON invalide'
     Unauthorized:
-      description: 'Token absent ou invalide.'
+      description: 'Token absent, invalide (signature, émetteur, format) ou expiré.'
       headers:
         WWW-Authenticate:
           schema:
             type: string
-            example: Bearer
+            example: 'Bearer error="invalid_token"'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-          example:
-            status: 401
-            error: UNAUTHORIZED
-            message: 'Authentification requise'
+          examples:
+            missing:
+              summary: 'Sans token'
+              value:
+                status: 401
+                error: UNAUTHORIZED
+                message: 'Authentification requise'
+            expired:
+              summary: 'Token expiré'
+              value:
+                status: 401
+                error: UNAUTHORIZED
+                message: 'Token expiré'
     Forbidden:
       description: "Rôle insuffisant ou ressource d'un autre client."
       content:
@@ -981,25 +990,12 @@ components:
   securitySchemes:
     bearerAuth:
       type: http
-      description: 'Token Keycloak (realm location-voitures). Les rôles sont lus dans la claim `roles`.'
+      description: 'Access token Keycloak (realm location-voitures), obtenu par exemple avec le client gateway. Les rôles sont lus dans la claim `roles`.'
       bearerFormat: JWT
       scheme: bearer
-    devUserId:
-      type: apiKey
-      description: "RÉSERVÉ AU DÉVELOPPEMENT (APP_ENV=dev). UUID de l'appelant, ex. client2 : 611f32de-ce7b-4927-b1c4-d113b6479d59."
-      name: X-Dev-User-Id
-      in: header
-    devRoles:
-      type: apiKey
-      description: 'RÉSERVÉ AU DÉVELOPPEMENT (APP_ENV=dev). Rôles séparés par des virgules : CLIENT, AGENT, ADMIN (CLIENT par défaut).'
-      name: X-Dev-Roles
-      in: header
 security:
   -
     bearerAuth: []
-  -
-    devUserId: []
-    devRoles: []
 tags:
   -
     name: Réclamations
