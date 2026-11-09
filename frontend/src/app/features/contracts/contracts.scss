@@ -39,3 +39,5 @@ dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margi
 dt { color: var(--muted); }
 dd { margin: 0; word-break: break-all; }
 .total td { font-weight: 700; }
+
+.field-error { color: #b91c1c; font-size: 0.85rem; }

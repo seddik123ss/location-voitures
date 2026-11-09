@@ -53,7 +53,7 @@ import { Contract, ContractStatus, ContractsService } from './contracts.service'
               <td>{{ c.signedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
               <td><span class="badge" [class]="c.status">{{ c.status === 'ACTIVE' ? 'En cours' : 'Clôturé' }}</span></td>
               <td>{{ c.closedAt ? (c.closedAt | date: 'dd/MM/yyyy HH:mm') : '—' }}</td>
-              <td class="num">{{ c.totalExtraFees | number: '1.3-3' }}</td>
+              <td class="num">{{ c.totalExtraFees | number: '1.3-3' : 'fr' }}</td>
               <td><a [routerLink]="c.id">Détails</a></td>
             </tr>
           }

@@ -22,8 +22,8 @@ import { Contract, ContractsService, FEE_LABELS, Inspection, ReturnSettlement } 
     }
     @if (settlement(); as s) {
       <div class="success">
-        Véhicule rendu, contrat clôturé. Frais : {{ s.totalExtraFees | number: '1.3-3' }} TND.
-        Caution à libérer : {{ s.depositToRelease | number: '1.3-3' }} TND.
+        Véhicule rendu, contrat clôturé. Frais : {{ s.totalExtraFees | number: '1.3-3' : 'fr' }} TND.
+        Caution à libérer : {{ s.depositToRelease | number: '1.3-3' : 'fr' }} TND.
       </div>
     }
 
@@ -57,8 +57,8 @@ import { Contract, ContractsService, FEE_LABELS, Inspection, ReturnSettlement } 
             <tr>
               <td>{{ i.type === 'PICKUP' ? 'Départ' : 'Retour' }}</td>
               <td>{{ i.inspectedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
-              <td class="num">{{ i.mileage | number }} km</td>
-              <td class="num">{{ i.fuelLevel | percent }}</td>
+              <td class="num">{{ i.mileage | number: '1.0-0' : 'fr' }} km</td>
+              <td class="num">{{ i.fuelLevel | percent: '1.0-0' : 'fr' }}</td>
               <td>{{ i.damages || '—' }}</td>
               <td>
                 @for (p of i.photos; track p; let n = $index) {
@@ -78,9 +78,9 @@ import { Contract, ContractsService, FEE_LABELS, Inspection, ReturnSettlement } 
           <thead><tr><th>Type</th><th class="num">Montant (TND)</th></tr></thead>
           <tbody>
             @for (f of c.extraFees; track f.id) {
-              <tr><td>{{ feeLabels[f.type] }}</td><td class="num">{{ f.amount | number: '1.3-3' }}</td></tr>
+              <tr><td>{{ feeLabels[f.type] }}</td><td class="num">{{ f.amount | number: '1.3-3' : 'fr' }}</td></tr>
             }
-            <tr class="total"><td>Total</td><td class="num">{{ c.totalExtraFees | number: '1.3-3' }}</td></tr>
+            <tr class="total"><td>Total</td><td class="num">{{ c.totalExtraFees | number: '1.3-3' : 'fr' }}</td></tr>
           </tbody>
         </table>
       }
@@ -89,13 +89,16 @@ import { Contract, ContractsService, FEE_LABELS, Inspection, ReturnSettlement } 
         <h2>Retour du véhicule</h2>
         <form class="card" #f="ngForm" (ngSubmit)="returnVehicle(c)">
           <p class="muted" style="margin-top: 0">
-            Départ : {{ pickup(c)?.mileage | number }} km, carburant {{ pickup(c)?.fuelLevel | percent }}.
+            Départ : {{ pickup(c)?.mileage | number: '1.0-0' : 'fr' }} km, carburant {{ pickup(c)?.fuelLevel | percent: '1.0-0' : 'fr' }}.
             Les frais (retard, carburant, kilomètres, dommages) sont calculés automatiquement.
           </p>
           <div class="grid">
             <label>
               Kilométrage au retour
               <input name="mileage" type="number" [min]="pickup(c)?.mileage ?? 0" [(ngModel)]="ret.mileage" required />
+              @if (tooLow(c)) {
+                <span class="field-error">Doit être au moins {{ pickup(c)?.mileage | number: '1.0-0' : 'fr' }} km (kilométrage au départ).</span>
+              }
             </label>
             <label>
               Carburant au retour : {{ ret.fuel }} %
@@ -114,6 +117,9 @@ import { Contract, ContractsService, FEE_LABELS, Inspection, ReturnSettlement } 
             Liens des photos, un par ligne (facultatif)
             <textarea name="photos" [(ngModel)]="ret.photos"></textarea>
           </label>
+          @if (error()) {
+            <div class="error" style="margin: 12px 0 0">{{ error() }}</div>
+          }
           <div class="actions">
             <button type="submit" [disabled]="f.invalid || saving()">{{ saving() ? 'Enregistrement…' : 'Clôturer le contrat' }}</button>
             <button type="button" class="danger" [disabled]="saving()" (click)="remove(c)">Supprimer le contrat</button>
@@ -150,6 +156,12 @@ export class ContractDetail implements OnInit {
 
   protected pickup(c: Contract): Inspection | undefined {
     return c.inspections.find((i) => i.type === 'PICKUP');
+  }
+
+  /** Kilométrage saisi inférieur à celui du départ (le bouton reste grisé : on explique pourquoi). */
+  protected tooLow(c: Contract): boolean {
+    const start = this.pickup(c)?.mileage ?? 0;
+    return this.ret.mileage !== null && `${this.ret.mileage}` !== '' && Number(this.ret.mileage) < start;
   }
 
   returnVehicle(c: Contract): void {
