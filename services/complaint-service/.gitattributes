@@ -1,0 +1,2 @@
+# Script exécuté par /bin/sh dans le conteneur : toujours en LF, même après un checkout sous Windows.
+*.sh text eol=lf
