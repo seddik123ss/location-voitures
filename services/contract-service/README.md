@@ -148,7 +148,7 @@ Données pour essayer : réservation `33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8` (r-c
 | `KEYCLOAK_ISSUER` | `http://localhost:8180/realms/location-voitures` | émetteur des tokens |
 | `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | `contract-service` / — | token de service pour les appels `/internal` |
 | `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672` | broker |
-| `USE_FAKE_SERVICES` | `false` | services simulés : `true` (tous), `false` (aucun) ou une liste parmi `reservation`, `payment`, `vehicle` |
+| `USE_FAKE_SERVICES` | `reservation` (dans `.env.example`) | services simulés : `true` (tous), `false` (aucun) ou une liste parmi `reservation`, `payment`, `vehicle` |
 
 ## Tests
 
