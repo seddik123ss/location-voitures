@@ -92,3 +92,54 @@ PUT {{base}}/api/vehicles/4d23ae40-9d0d-47e0-a5bc-60dc9690242e/maintenances/6475
 Content-Type: application/json
 
 { "type": "Révision complète", "date": "2026-11-05", "cost": 220.5 }
+
+### ===== Sécurité AGENT / ADMIN =====
+
+### Login agent1 (AGENT)
+# @name agent
+POST http://localhost:8180/realms/location-voitures/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=rental-front&username=agent1&password=agent1_pwd
+
+### Login client1 (CLIENT)
+# @name client
+POST http://localhost:8180/realms/location-voitures/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=rental-front&username=client1&password=client1_pwd
+
+### S1. Catalogue sans token (attendu : 200, reste public)
+GET {{base}}/api/vehicles
+
+### S2. Créer une catégorie sans token (attendu : 401)
+POST {{base}}/api/categories
+Content-Type: application/json
+
+{ "name": "Sécu", "dailyRate": 50, "deposit": 200 }
+
+### S3. Créer une catégorie avec un CLIENT (attendu : 403)
+POST {{base}}/api/categories
+Authorization: Bearer {{client.response.body.access_token}}
+Content-Type: application/json
+
+{ "name": "Sécu", "dailyRate": 50, "deposit": 200 }
+
+### S4. Créer une catégorie avec un AGENT (attendu : 201)
+# @name created
+POST {{base}}/api/categories
+Authorization: Bearer {{agent.response.body.access_token}}
+Content-Type: application/json
+
+{ "name": "Sécu", "dailyRate": 50, "deposit": 200 }
+
+### S5. La supprimer avec l'AGENT (attendu : 204)
+DELETE {{base}}/api/categories/{{created.response.body.id}}
+Authorization: Bearer {{agent.response.body.access_token}}
+
+### S6. Maintenances sans token (attendu : 401)
+GET {{base}}/api/vehicles/4d23ae40-9d0d-47e0-a5bc-60dc9690242e/maintenances
+
+### S7. Maintenances avec l'AGENT (attendu : 200)
+GET {{base}}/api/vehicles/4d23ae40-9d0d-47e0-a5bc-60dc9690242e/maintenances
+Authorization: Bearer {{agent.response.body.access_token}}

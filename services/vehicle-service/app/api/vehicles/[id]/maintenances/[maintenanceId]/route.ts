@@ -3,6 +3,7 @@ import { ApiError, handle, parseId, readJson } from "@/lib/api";
 import { notFound } from "@/lib/http";
 import { maintenanceSchema } from "@/lib/schemas";
 import { toMaintenance } from "@/lib/serializers";
+import { requireRoles, STAFF } from "@/lib/auth"; // ← AJOUT
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +19,13 @@ async function findOr404(ctx: Ctx) {
   return m;
 }
 
-export const GET = handle<Ctx>(async (_req, ctx) => {
+export const GET = handle<Ctx>(async (req, ctx) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   return Response.json(toMaintenance(await findOr404(ctx)));
 });
 
 export const PUT = handle<Ctx>(async (req, ctx) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const existing = await findOr404(ctx);
   const data = await readJson(req, maintenanceSchema);
   const m = await prisma.maintenance.update({
@@ -32,7 +35,8 @@ export const PUT = handle<Ctx>(async (req, ctx) => {
   return Response.json(toMaintenance(m));
 });
 
-export const DELETE = handle<Ctx>(async (_req, ctx) => {
+export const DELETE = handle<Ctx>(async (req, ctx) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const existing = await findOr404(ctx);
   await prisma.maintenance.delete({ where: { id: existing.id } });
   return new Response(null, { status: 204 });

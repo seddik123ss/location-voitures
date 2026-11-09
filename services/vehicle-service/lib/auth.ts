@@ -36,3 +36,6 @@ export async function requireRoles(req: Request, allowed: string[]): Promise<JWT
   }
   return payload;
 }
+
+// Rôles autorisés à gérer la flotte
+export const STAFF = ["AGENT", "ADMIN"];

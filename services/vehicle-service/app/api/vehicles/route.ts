@@ -1,20 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { ApiError, handle, parsePagination, parseQuery, readJson } from "@/lib/api";
-import { notFound } from "@/lib/http";
+import { handle, parsePagination, parseQuery, readJson } from "@/lib/api";
 import { vehicleFilterSchema, vehicleSchema } from "@/lib/schemas";
 import { toVehicle } from "@/lib/serializers";
+import { ensureRefsExist } from "@/lib/vehicle-refs";
+import { requireRoles, STAFF } from "@/lib/auth"; // ← AJOUT
 
 export const dynamic = "force-dynamic";
-
-// Règle : catégorie ou agence inexistante -> 404
-export async function ensureRefsExist(categoryId: string, agencyId: string) {
-  const [cat, ag] = await Promise.all([
-    prisma.category.findUnique({ where: { id: categoryId } }),
-    prisma.agency.findUnique({ where: { id: agencyId } }),
-  ]);
-  if (!cat) throw new ApiError(notFound(`Catégorie ${categoryId} introuvable`));
-  if (!ag) throw new ApiError(notFound(`Agence ${agencyId} introuvable`));
-}
 
 export const GET = handle(async (req) => {
   const url = new URL(req.url);
@@ -45,6 +36,7 @@ export const GET = handle(async (req) => {
 });
 
 export const POST = handle(async (req) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const data = await readJson(req, vehicleSchema);
   await ensureRefsExist(data.categoryId, data.agencyId);
   const v = await prisma.vehicle.create({

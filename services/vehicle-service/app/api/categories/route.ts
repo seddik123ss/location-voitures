@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { handle, parsePagination, readJson } from "@/lib/api";
 import { categorySchema } from "@/lib/schemas";
 import { toCategory } from "@/lib/serializers";
+import { requireRoles, STAFF } from "@/lib/auth"; // ← AJOUT
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export const GET = handle(async (req) => {
 });
 
 export const POST = handle(async (req) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const data = await readJson(req, categorySchema);
   const c = await prisma.category.create({ data });
   return Response.json(toCategory(c), {

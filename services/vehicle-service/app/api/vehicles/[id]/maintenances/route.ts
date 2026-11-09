@@ -3,6 +3,7 @@ import { ApiError, handle, parseId, parsePagination, readJson } from "@/lib/api"
 import { notFound } from "@/lib/http";
 import { maintenanceSchema } from "@/lib/schemas";
 import { toMaintenance } from "@/lib/serializers";
+import { requireRoles, STAFF } from "@/lib/auth"; // ← AJOUT
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ async function ensureVehicle(id: string) {
 }
 
 export const GET = handle<Ctx>(async (req, { params }) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const vehicleId = parseId((await params).id);
   await ensureVehicle(vehicleId);
   const { page, size, skip, take } = parsePagination(new URL(req.url));
@@ -25,6 +27,7 @@ export const GET = handle<Ctx>(async (req, { params }) => {
 });
 
 export const POST = handle<Ctx>(async (req, { params }) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const vehicleId = parseId((await params).id);
   await ensureVehicle(vehicleId);
   const data = await readJson(req, maintenanceSchema);

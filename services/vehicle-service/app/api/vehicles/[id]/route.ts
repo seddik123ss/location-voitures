@@ -4,7 +4,8 @@ import { conflict, notFound } from "@/lib/http";
 import { vehicleSchema } from "@/lib/schemas";
 import { toVehicle } from "@/lib/serializers";
 import { getActiveReservations } from "@/lib/reservation-client";
-import { ensureRefsExist } from "../route";
+import { ensureRefsExist } from "@/lib/vehicle-refs";
+import { requireRoles, STAFF } from "@/lib/auth"; // ← AJOUT
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export const GET = handle<Ctx>(async (_req, { params }) => {
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const id = parseId((await params).id);
   await findOr404(id);
   const data = await readJson(req, vehicleSchema);
@@ -38,7 +40,8 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
 });
 
 // Règle : supprimer un véhicule loué ou réservé -> 409
-export const DELETE = handle<Ctx>(async (_req, { params }) => {
+export const DELETE = handle<Ctx>(async (req, { params }) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const id = parseId((await params).id);
   const v = await findOr404(id);
 

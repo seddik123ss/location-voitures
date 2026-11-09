@@ -3,6 +3,7 @@ import { ApiError, handle, parseId, readJson } from "@/lib/api";
 import { notFound } from "@/lib/http";
 import { categorySchema } from "@/lib/schemas";
 import { toCategory } from "@/lib/serializers";
+import { requireRoles, STAFF } from "@/lib/auth"; // ← AJOUT
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,15 @@ export const GET = handle<Ctx>(async (_req, { params }) => {
 });
 
 export const PUT = handle<Ctx>(async (req, { params }) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const id = parseId((await params).id);
   const data = await readJson(req, categorySchema);
   const c = await prisma.category.update({ where: { id }, data });
   return Response.json(toCategory(c));
 });
 
-export const DELETE = handle<Ctx>(async (_req, { params }) => {
+export const DELETE = handle<Ctx>(async (req, { params }) => {
+  await requireRoles(req, STAFF); // ← AJOUT
   const id = parseId((await params).id);
   await prisma.category.delete({ where: { id } });
   return new Response(null, { status: 204 });
