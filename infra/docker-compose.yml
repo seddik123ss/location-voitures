@@ -1,4 +1,21 @@
 name: location-voitures
+
+# Variables communes aux conteneurs de complaint-service (profil "services").
+x-complaint-env: &complaint-env
+  DATABASE_URL: mysql://complaint_svc:complaint_pwd@mysql:3306/complaint_db?serverVersion=8.4&charset=utf8mb4
+  EUREKA_URL: http://eureka:8761/eureka
+  SERVICE_HOST: host.docker.internal
+  SERVICE_PORT: "8106"
+  # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
+  KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+  KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+  KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
+  KEYCLOAK_CLIENT_ID: complaint-service
+  KEYCLOAK_CLIENT_SECRET: ${COMPLAINT_KEYCLOAK_CLIENT_SECRET:-}
+  APP_SECRET: ${COMPLAINT_APP_SECRET:-}
+  LOOKUP_MODE: ${COMPLAINT_LOOKUP_MODE:-demo}
+  RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+
 services:
   mysql:
     image: mysql:8.4
@@ -41,6 +58,38 @@ services:
       KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
       KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
     depends_on: [eureka, keycloak]
+
+  # Services métier : profil "services", donc absents de "docker compose up -d" (infrastructure seule).
+  # docker compose --profile services up -d --build complaint-service complaint-eureka
+  complaint-service:
+    profiles: [services]
+    build:
+      context: ../services/complaint-service
+      additional_contexts:
+        shared: ../shared
+    image: location-voitures/complaint-service
+    ports: ["8106:8106"]
+    environment: *complaint-env
+    depends_on: [mysql, eureka, keycloak]
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8106/health') === false ? 1 : 0);"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+  complaint-eureka:
+    profiles: [services]
+    build:
+      context: ../services/complaint-service
+      additional_contexts:
+        shared: ../shared
+    image: location-voitures/complaint-service
+    command: ["php", "bin/console", "app:eureka:run"]
+    environment: *complaint-env
+    depends_on:
+      complaint-service:
+        condition: service_healthy
+    stop_grace_period: 15s
 volumes:
   mysql-data: {}
   pg-data: {}

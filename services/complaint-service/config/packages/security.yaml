@@ -1,0 +1,34 @@
+security:
+    providers:
+        # Les utilisateurs viennent du token (ApiUser construit par l'authenticator), pas d'une base.
+        users_in_memory: { memory: null }
+
+    firewalls:
+        dev:
+            pattern: ^/(_profiler(/|$)|(_wdt|assets|build)/)
+            security: false
+        main:
+            stateless: true
+            provider: users_in_memory
+            entry_point: App\Security\JsonAuthenticationEntryPoint
+            # Access token Keycloak (Authorization: Bearer), dans tous les environnements.
+            # Ignoré sur les routes PUBLIC_ACCESS ci-dessous (un firewall stateless n'est jamais lazy).
+            custom_authenticators:
+                - App\Security\JwtAuthenticator
+
+    # Seule la première règle correspondante s'applique.
+    # /api demande un rôle d'utilisateur : un token sans CLIENT, AGENT ni ADMIN (compte de service INTERNAL,
+    # utilisateur sans rôle) reçoit 403.
+    access_control:
+        - { path: ^/health$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/doc, roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: [ROLE_CLIENT, ROLE_AGENT, ROLE_ADMIN] }
+
+# Tests seulement : appelant donné par les en-têtes X-Dev-User-Id / X-Dev-Roles (tests fonctionnels existants),
+# en plus de l'authenticator JWT.
+when@test:
+    security:
+        firewalls:
+            main:
+                custom_authenticators:
+                    - App\Security\DevHeaderAuthenticator

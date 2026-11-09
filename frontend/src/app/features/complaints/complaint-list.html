@@ -1,0 +1,108 @@
+<div class="head">
+  <div>
+    <h1>{{ staff ? 'Réclamations' : 'Mes réclamations' }}</h1>
+    <p class="sub">
+      {{ staff ? 'Toutes les réclamations des clients.' : 'Vos réclamations sur une réservation ou un contrat.' }}
+    </p>
+  </div>
+  @if (isClient) {
+    <a class="btn primary" routerLink="new">Nouvelle réclamation</a>
+  }
+</div>
+
+<form class="card filters" (ngSubmit)="search()">
+  <label>
+    Statut
+    <select name="status" [ngModel]="status()" (ngModelChange)="status.set($event)">
+      <option value="">Tous</option>
+      @for (s of statuses; track s) {
+        <option [value]="s">{{ statusLabels[s] }}</option>
+      }
+    </select>
+  </label>
+  <label>
+    Catégorie
+    <select name="category" [ngModel]="category()" (ngModelChange)="category.set($event)">
+      <option value="">Toutes</option>
+      @for (c of categories; track c) {
+        <option [value]="c">{{ categoryLabels[c] }}</option>
+      }
+    </select>
+  </label>
+  @if (staff) {
+    <label>
+      Priorité
+      <select name="priority" [ngModel]="priority()" (ngModelChange)="priority.set($event)">
+        <option value="">Toutes</option>
+        @for (p of priorities; track p) {
+          <option [value]="p">{{ priorityLabels[p] }}</option>
+        }
+      </select>
+    </label>
+    <label class="grow">
+      Client (UUID)
+      <input name="userId" placeholder="ex. 611f32de-ce7b-4927-b1c4-d113b6479d59"
+             [ngModel]="userId()" (ngModelChange)="userId.set($event)" />
+      @if (userIdInvalid()) {
+        <span class="invalid">UUID attendu</span>
+      }
+    </label>
+  }
+  <div class="actions">
+    <button class="btn primary" type="submit" [disabled]="userIdInvalid()">Filtrer</button>
+    <button class="btn" type="button" (click)="reset()">Effacer</button>
+  </div>
+</form>
+
+@if (notice()) {
+  <div class="alert ok">{{ notice() }}</div>
+}
+@if (error()) {
+  <div class="alert">{{ error() }}</div>
+}
+
+@if (result(); as r) {
+  @if (r.items.length === 0) {
+    <div class="card empty">
+      {{ staff ? 'Aucune réclamation ne correspond à ces filtres.' : "Vous n'avez aucune réclamation" + (status() || category() ? ' avec ces filtres.' : '.') }}
+    </div>
+  } @else {
+    <div class="card table">
+      <table>
+        <thead>
+          <tr>
+            <th>Sujet</th>
+            <th>Catégorie</th>
+            <th>Priorité</th>
+            <th>Statut</th>
+            @if (staff) {
+              <th>Client</th>
+            }
+            <th>Mise à jour</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of r.items; track c.id) {
+            <tr>
+              <td><a [routerLink]="c.id">{{ c.subject }}</a></td>
+              <td>{{ categoryLabels[c.category] }}</td>
+              <td><span class="badge p-{{ c.priority }}">{{ priorityLabels[c.priority] }}</span></td>
+              <td><span class="badge s-{{ c.status }}">{{ statusLabels[c.status] }}</span></td>
+              @if (staff) {
+                <td class="mono" [title]="c.userId">{{ c.userId.slice(0, 8) }}…</td>
+              }
+              <td>{{ c.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span>{{ r.total }} réclamation{{ r.total > 1 ? 's' : '' }} · page {{ r.page + 1 }} / {{ pageCount() }}</span>
+      <button class="btn" type="button" [disabled]="r.page === 0 || loading()" (click)="goTo(r.page - 1)">Précédente</button>
+      <button class="btn" type="button" [disabled]="r.page + 1 >= pageCount() || loading()" (click)="goTo(r.page + 1)">Suivante</button>
+    </div>
+  }
+} @else if (loading()) {
+  <p class="sub">Chargement…</p>
+}

@@ -1,0 +1,140 @@
+<a class="back" routerLink="/complaints">← {{ staff ? 'Réclamations' : 'Mes réclamations' }}</a>
+
+@if (loadError()) {
+  <div class="alert">{{ loadError() }}</div>
+} @else if (complaint(); as c) {
+  <div class="head">
+    <div>
+      <h1>{{ c.subject }}</h1>
+      <p class="sub">
+        <span class="badge s-{{ c.status }}">{{ statusLabels[c.status] }}</span>
+        <span class="badge p-{{ c.priority }}">Priorité {{ priorityLabels[c.priority] | lowercase }}</span>
+        {{ categoryLabels[c.category] }} · créée le {{ c.createdAt | date: 'dd/MM/yyyy à HH:mm' }}
+      </p>
+    </div>
+    @if (canDelete()) {
+      <div class="actions">
+        @if (canEdit()) {
+          <a class="btn" [routerLink]="['/complaints', c.id, 'edit']">Modifier</a>
+        }
+        <button class="btn danger" type="button" [disabled]="busy()" (click)="remove()">Supprimer</button>
+      </div>
+    }
+  </div>
+
+  @if (notice()) {
+    <div class="alert ok">{{ notice() }}</div>
+  }
+  @if (error()) {
+    <div class="alert">{{ error() }}</div>
+  }
+
+  <div class="grid">
+    <div>
+      <section class="card">
+        <h2>Description</h2>
+        <p class="text">{{ c.description }}</p>
+        <dl>
+          @if (c.reservationId) {
+            <dt>Réservation</dt>
+            <dd class="mono">{{ c.reservationId }}</dd>
+          }
+          @if (c.contractId) {
+            <dt>Contrat</dt>
+            <dd class="mono">{{ c.contractId }}</dd>
+          }
+          @if (staff) {
+            <dt>Client</dt>
+            <dd class="mono">{{ c.userId }}</dd>
+          }
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>Discussion</h2>
+        @if (c.messages.length === 0) {
+          <p class="hint">Aucun message pour l'instant.</p>
+        }
+        <ol class="thread">
+          @for (m of c.messages; track m.id) {
+            <li [class.mine]="m.authorId === me" [class.staff]="m.authorRole !== 'CLIENT'">
+              <div class="bubble">
+                <div class="meta">
+                  <strong>{{ authorLabel(m.authorId, m.authorRole) }}</strong>
+                  · {{ m.createdAt | date: 'dd/MM/yyyy HH:mm' }}
+                </div>
+                <p class="text">{{ m.content }}</p>
+              </div>
+            </li>
+          }
+        </ol>
+        @if (canWrite()) {
+          <form class="reply" (ngSubmit)="sendMessage()">
+            <textarea name="message" rows="3" maxlength="2000"
+                      [placeholder]="staff ? 'Répondre au client…' : 'Ajouter un message…'"
+                      [ngModel]="message()" (ngModelChange)="message.set($event)"></textarea>
+            <button class="btn primary" type="submit" [disabled]="busy() || !message().trim()">Envoyer</button>
+          </form>
+        } @else if (final()) {
+          <p class="hint">Réclamation clôturée : la discussion est fermée.</p>
+        }
+      </section>
+    </div>
+
+    <aside>
+      @if (staff && !final()) {
+        <section class="card">
+          <h2>Traitement</h2>
+          <form class="stack" (ngSubmit)="changeStatus()">
+            <label>
+              Nouveau statut
+              <select name="status" [ngModel]="newStatus()" (ngModelChange)="newStatus.set($event)">
+                <option value="">Choisir</option>
+                @for (s of c.allowedTransitions; track s) {
+                  <option [value]="s">{{ statusLabels[s] }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              Commentaire
+              <textarea name="comment" rows="2" maxlength="1000" placeholder="Visible dans l'historique"
+                        [ngModel]="statusComment()" (ngModelChange)="statusComment.set($event)"></textarea>
+            </label>
+            <button class="btn primary" type="submit" [disabled]="busy() || !newStatus()">Changer le statut</button>
+          </form>
+          <form class="stack priority" (ngSubmit)="changePriority()">
+            <label>
+              Priorité
+              <select name="priority" [ngModel]="newPriority()" (ngModelChange)="newPriority.set($event)">
+                @for (p of priorities; track p) {
+                  <option [value]="p">{{ priorityLabels[p] }}</option>
+                }
+              </select>
+            </label>
+            <button class="btn" type="submit" [disabled]="busy() || newPriority() === c.priority">Changer la priorité</button>
+          </form>
+        </section>
+      }
+
+      <section class="card">
+        <h2>Historique des statuts</h2>
+        <ol class="history">
+          @for (h of c.statusHistory; track h.id) {
+            <li>
+              <span class="badge s-{{ h.toStatus }}">{{ statusLabels[h.toStatus] }}</span>
+              <div class="meta">
+                {{ h.fromStatus ? 'par ' + authorLabel(h.changedBy, h.changedByRole) : 'Création' }}
+                · {{ h.changedAt | date: 'dd/MM/yyyy HH:mm' }}
+              </div>
+              @if (h.comment) {
+                <p class="text">« {{ h.comment }} »</p>
+              }
+            </li>
+          }
+        </ol>
+      </section>
+    </aside>
+  </div>
+} @else {
+  <p class="sub">Chargement…</p>
+}
