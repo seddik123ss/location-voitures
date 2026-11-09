@@ -53,11 +53,13 @@ Configuration (`.env.local`) :
 ```
 KEYCLOAK_CLIENT_ID=complaint-service
 KEYCLOAK_CLIENT_SECRET=<champ "secret" du client complaint-service dans infra/keycloak/location-voitures-realm.json>
-LOOKUP_MODE=demo
+LOOKUP_MODE=demo   # ou eureka
 ```
 
-`LOOKUP_MODE` choisit l'implémentation : `eureka` (par défaut, vrais appels HTTP) ou `demo` (réservations et contrats de
-`docs/demo-ids.md`, sans appel). Gardez `demo` en dev tant que reservation-service et contract-service ne sont pas prêts.
+`LOOKUP_MODE` choisit l'implémentation : `demo` (par défaut : réservations et contrats de `docs/demo-ids.md`, sans appel)
+ou `eureka` (vrais appels HTTP). Le défaut reste `demo` tant que reservation-service et contract-service n'ont pas leurs
+routes `/internal` ; pour essayer les vrais appels, mettre `LOOKUP_MODE=eureka` dans `.env.local`.
+Formats attendus et traduction des erreurs : `docs/internal-api.md`, section complaint-service.
 Les tests utilisent toujours `demo` (`.env.test`).
 
 ## Documentation de l'API

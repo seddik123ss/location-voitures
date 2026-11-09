@@ -12,8 +12,8 @@ use Symfony\Contracts\Service\ServiceProviderInterface;
 
 /**
  * Choisit l'implémentation selon LOOKUP_MODE :
- * - eureka (par défaut) : appels HTTP vers RENTAL-RESERVATION et RENTAL-CONTRACT ;
- * - demo : données de docs/demo-ids.md (tests, ou dev tant que les autres services ne sont pas prêts).
+ * - demo (par défaut) : données de docs/demo-ids.md (tests, et dev tant que les autres services ne sont pas prêts) ;
+ * - eureka : appels HTTP vers RENTAL-RESERVATION et RENTAL-CONTRACT.
  */
 final class LookupFactory
 {

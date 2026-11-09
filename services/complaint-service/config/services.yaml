@@ -14,8 +14,9 @@ parameters:
     env(KEYCLOAK_ISSUER): 'http://localhost:8180/realms/location-voitures'
     env(KEYCLOAK_CLIENT_ID): 'complaint-service'
     env(KEYCLOAK_CLIENT_SECRET): ''
-    # eureka : appels HTTP aux autres services ; demo : données de docs/demo-ids.md (voir App\Integration\LookupFactory).
-    env(LOOKUP_MODE): 'eureka'
+    # demo (par défaut tant que reservation-service et contract-service n'ont pas leurs routes /internal) :
+    # données de docs/demo-ids.md ; eureka : appels HTTP aux autres services (voir App\Integration\LookupFactory).
+    env(LOOKUP_MODE): 'demo'
 
 services:
     # default configuration for services in *this* file

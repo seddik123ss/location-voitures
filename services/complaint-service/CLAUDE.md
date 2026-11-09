@@ -83,10 +83,10 @@ On Windows, send JSON bodies containing accents from a file (`--data-binary @fil
 
 - Ownership checks call `GET /internal/reservations/{id}` (RENTAL-RESERVATION) and `GET /internal/contracts/{id}` (RENTAL-CONTRACT): not found → 404, belongs to another user → 403. Peer/Eureka down → 503, unreadable response → 502. This goes through the interfaces `App\Integration\ReservationLookup` / `ContractLookup` (return `null` when not found).
 - `LOOKUP_MODE` picks the implementation, through `App\Integration\LookupFactory` (factory services in `services.yaml`):
-  - `eureka` (default): `Http*Lookup` → `Integration\Http\InternalApiClient` → `ServiceResolver` (Eureka) + `ServiceTokenProvider` (Keycloak client credentials, cached in `cache.app`, retried once on 401) + `X-Correlation-Id`;
-  - `demo`: `Demo*Lookup`, built from `DemoIds`.
+  - `demo` (default, `env(LOOKUP_MODE)` in `services.yaml` and `.env.dist`, until Aziz's and Rania's `/internal` routes exist): `Demo*Lookup`, built from `DemoIds`;
+  - `eureka`: `Http*Lookup` → `Integration\Http\InternalApiClient` → `ServiceResolver` (Eureka) + `ServiceTokenProvider` (Keycloak client credentials, cached in `cache.app`, retried once on 401) + `X-Correlation-Id`.
 
-  `.env.test` forces `demo`; Seddik's `.env.local` uses `demo` until the peer services exist. All the 404/502/503 mapping lives in `InternalApiClient`, and field parsing in `Payload` (a missing field is a 502). Public error messages stay short; the network details only go to the logger.
+  `.env.test` forces `demo`. Expected response formats and the error mapping are in `docs/internal-api.md`. All the 404/502/503 mapping lives in `InternalApiClient`, and field parsing in `Payload` (a missing field is a 502). Public error messages stay short; the network details only go to the logger.
 - The resolver and the token provider sit behind interfaces so that unit tests (`tests/Unit/Integration`) use fakes plus `MockHttpClient`. `EurekaClient` is final and can't be mocked.
 - `App\Http\CorrelationId` + `CorrelationIdListener`: the incoming `X-Correlation-Id` is reused as is (printable, at most 128 characters), otherwise a UUID is generated; it is echoed on every response.
 - To try the HTTP mode under `php -S` with `LOOKUP_MODE=eureka` set in the environment, start PHP with `-d variables_order=EGPCS`; otherwise `.env.local` wins over the real environment variable.
