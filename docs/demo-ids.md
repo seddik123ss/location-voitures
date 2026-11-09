@@ -46,9 +46,11 @@ Les utilisateurs reprennent les ID de Keycloak (realm location-voitures). Mot de
 | Clé | UUID | Réservation | Type | Montant | Statut |
 | --- | --- | --- | --- | --- | --- |
 | p-confirmed | d76b538e-e367-4bb3-966b-98a4d9dc93a5 | r-confirmed | RENTAL | 450.000 | SUCCEEDED |
+| p-confirmed-deposit | 527d092e-2fc3-409c-bb3b-525e074ceb93 | r-confirmed | DEPOSIT | 500.000 | SUCCEEDED |
 | p-completed | 918e07dc-4995-4985-8373-aad04e13636f | r-completed | RENTAL | 640.000 | SUCCEEDED |
 | p-completed-deposit | 7ddc173a-865a-4a6b-981d-09f3ec2b6958 | r-completed | DEPOSIT | 1000.000 | SUCCEEDED |
 
+`p-confirmed-deposit` est la caution de r-confirmed (`depositAmount` 500.000, catégorie Économique).
 `p-completed-deposit` est la caution de r-completed (`depositAmount` 1000.000, catégorie SUV). Elle reste SUCCEEDED dans les données
 de démo : c'est le message `ReturnSettled` (`docs/events/ReturnSettled.json`, `depositToRelease` 1000.0) qui crée le REFUND et la fait passer à REFUNDED.
 

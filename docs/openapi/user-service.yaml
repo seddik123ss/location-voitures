@@ -1,35 +1,1327 @@
-﻿openapi: 3.0.3
+openapi: 3.0.1
 info:
   title: user-service
-  version: 0.1.0
+  description: |-
+    Utilisateurs, adresses et permis de conduire de la plateforme de location de voitures.
+    L'identifiant d'un utilisateur est son identifiant Keycloak ("sub").
+    Rôles : ADMIN gère les utilisateurs ; AGENT consulte et vérifie les permis ;
+    CLIENT lit et modifie son propre profil ; INTERNAL (comptes de service) pour /internal/**.
+  version: 1.0.0
 servers:
-  - url: http://localhost:8088
-    description: via la Gateway
-paths: {}
+- url: http://localhost:8101
+  description: "direct (développement, Swagger UI)"
+- url: http://localhost:8088
+  description: via la Gateway
+security:
+- bearerAuth: []
+tags:
+- name: Adresses
+  description: Adresses d'un utilisateur
+- name: Interne
+  description: "Routes pour les autres microservices (token de compte de service,\
+    \ rôle INTERNAL)"
+- name: Permis
+  description: Permis de conduire (un par utilisateur)
+- name: Santé
+  description: État du service
+- name: Utilisateurs
+  description: Profils des utilisateurs (id = identifiant Keycloak)
+paths:
+  /api/users/{userId}/addresses/{addressId}:
+    get:
+      tags:
+      - Adresses
+      summary: Consulter une adresse
+      description: "Rôles : ADMIN, AGENT, ou l'utilisateur lui-même."
+      operationId: get_1
+      parameters:
+      - name: userId
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      - name: addressId
+        in: path
+        description: Identifiant de l'adresse
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: fa1bace4-042a-4ce2-be5f-d4c3cb4b98da
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Adresse
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AddressResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    put:
+      tags:
+      - Adresses
+      summary: Modifier une adresse
+      description: "ADMIN, ou l'utilisateur lui-même."
+      operationId: update
+      parameters:
+      - name: userId
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      - name: addressId
+        in: path
+        description: Identifiant de l'adresse
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: fa1bace4-042a-4ce2-be5f-d4c3cb4b98da
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressRequest"
+        required: true
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "200":
+          description: Adresse modifiée
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AddressResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    delete:
+      tags:
+      - Adresses
+      summary: Supprimer une adresse
+      description: "ADMIN, ou l'utilisateur lui-même."
+      operationId: delete
+      parameters:
+      - name: userId
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      - name: addressId
+        in: path
+        description: Identifiant de l'adresse
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: fa1bace4-042a-4ce2-be5f-d4c3cb4b98da
+      responses:
+        "204":
+          description: Supprimée
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/users/{id}:
+    get:
+      tags:
+      - Utilisateurs
+      summary: Consulter un utilisateur
+      description: "Rôles : ADMIN, AGENT, ou l'utilisateur lui-même. Renvoie le profil\
+        \ avec adresses et permis."
+      operationId: get_2
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Profil complet
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    put:
+      tags:
+      - Utilisateurs
+      summary: Modifier un utilisateur
+      description: "ADMIN, ou l'utilisateur lui-même. Seul un ADMIN peut changer `role`\
+        \ et `active` (sinon 403)."
+      operationId: update_1
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+        required: true
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Profil modifié
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    delete:
+      tags:
+      - Utilisateurs
+      summary: Supprimer un utilisateur
+      description: "Rôle : ADMIN. Supprime aussi ses adresses et son permis."
+      operationId: delete_1
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "204":
+          description: Supprimé
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/licenses/{id}:
+    get:
+      tags:
+      - Permis
+      summary: Consulter un permis
+      description: "Rôles : ADMIN, AGENT, ou le propriétaire du permis."
+      operationId: get_3
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant du permis
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: edc2e0e3-709d-4caa-b617-53e4c5f128cf
+      responses:
+        "200":
+          description: Permis
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LicenseResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    put:
+      tags:
+      - Permis
+      summary: Modifier un permis
+      description: "ADMIN, ou le propriétaire. Une modification annule la vérification\
+        \ (verified = false)."
+      operationId: update_2
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant du permis
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: edc2e0e3-709d-4caa-b617-53e4c5f128cf
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLicenseRequest"
+        required: true
+      responses:
+        "200":
+          description: Permis modifié
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LicenseResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    delete:
+      tags:
+      - Permis
+      summary: Supprimer un permis
+      description: "ADMIN, ou le propriétaire."
+      operationId: delete_2
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant du permis
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: edc2e0e3-709d-4caa-b617-53e4c5f128cf
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "204":
+          description: Supprimé
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/users:
+    get:
+      tags:
+      - Utilisateurs
+      summary: Lister les utilisateurs (filtre et pagination)
+      description: "Rôles : ADMIN, AGENT. Tri par nom puis prénom. Le filtre `name`\
+        \ cherche dans le prénom, le nom ou \"prénom nom\", sans tenir compte de la\
+        \ casse."
+      operationId: list
+      parameters:
+      - name: role
+        in: query
+        description: Filtrer par rôle
+        required: false
+        schema:
+          type: string
+          enum:
+          - CLIENT
+          - AGENT
+          - ADMIN
+        example: CLIENT
+      - name: name
+        in: query
+        description: Texte cherché dans le prénom ou le nom
+        required: false
+        schema:
+          type: string
+        example: client
+      - name: page
+        in: query
+        description: Numéro de page (à partir de 0)
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+        example: 0
+      - name: size
+        in: query
+        description: Taille de page (1 à 100)
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+        example: 20
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: "Page d'utilisateurs {items, page, size, total}"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseUserSummaryResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags:
+      - Utilisateurs
+      summary: Créer un profil utilisateur
+      description: "ADMIN : n'importe quel profil. Autre utilisateur connecté : uniquement\
+        \ son propre profil (id = son \"sub\"), actif, avec le rôle CLIENT. Réponse\
+        \ 201 avec l'en-tête Location."
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+        required: true
+      responses:
+        "201":
+          description: "Profil créé (en-tête Location : /api/users/{id})"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/users/{userId}/addresses:
+    get:
+      tags:
+      - Adresses
+      summary: Lister les adresses d'un utilisateur
+      description: "Rôles : ADMIN, AGENT, ou l'utilisateur lui-même."
+      operationId: list_1
+      parameters:
+      - name: userId
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Adresses de l'utilisateur
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AddressResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags:
+      - Adresses
+      summary: Ajouter une adresse
+      description: "ADMIN, ou l'utilisateur lui-même. Réponse 201 avec Location."
+      operationId: create_1
+      parameters:
+      - name: userId
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressRequest"
+        required: true
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "201":
+          description: Adresse créée
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AddressResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/licenses:
+    get:
+      tags:
+      - Permis
+      summary: Lister les permis
+      description: "Rôles : ADMIN, AGENT. Filtre facultatif par utilisateur. Tri par\
+        \ date d'expiration croissante."
+      operationId: list_2
+      parameters:
+      - name: userId
+        in: query
+        description: Filtrer par utilisateur
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      - name: page
+        in: query
+        description: Numéro de page (à partir de 0)
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+        example: 0
+      - name: size
+        in: query
+        description: Taille de page (1 à 100)
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+        example: 20
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: "Page de permis {items, page, size, total}"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseLicenseResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags:
+      - Permis
+      summary: Ajouter un permis
+      description: "ADMIN, ou l'utilisateur pour lui-même. Règles : un seul permis\
+        \ par utilisateur (409), numéro unique (409), permis déjà expiré (422), dé\
+        livrance dans le futur ou expiration avant délivrance (422). Le permis cré\
+        é n'est pas vérifié. Réponse 201 avec Location."
+      operationId: create_2
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLicenseRequest"
+        required: true
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "201":
+          description: "Permis créé (en-tête Location : /api/licenses/{id})"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LicenseResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/licenses/{id}/verify:
+    patch:
+      tags:
+      - Permis
+      summary: Marquer un permis comme vérifié
+      description: "Rôles : ADMIN, AGENT (contrôle du permis physique en agence).\
+        \ 422 si le permis est expiré."
+      operationId: verify
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant du permis
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: edc2e0e3-709d-4caa-b617-53e4c5f128cf
+      responses:
+        "200":
+          description: Permis vérifié
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LicenseResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /internal/users/{id}:
+    get:
+      tags:
+      - Interne
+      summary: Utilisateur + permis (pour reservation-service)
+      description: "Format fixé dans docs/internal-api.md : {id, firstname, lastname,\
+        \ email, phone, role, active, license: {number, category, issueDate, expiryDate,\
+        \ verified} ou null}. Rôle : INTERNAL."
+      operationId: get
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant Keycloak de l'utilisateur
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "200":
+          description: Utilisateur trouvé
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InternalUserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /health:
+    get:
+      tags:
+      - Santé
+      summary: Vérifier que le service répond
+      description: "Route publique (sans token). Renvoie {\"status\":\"UP\"} (convention\
+        \ commune)."
+      operationId: health
+      responses:
+        "200":
+          description: Service démarré
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+      security: []
+  /api/users/{id}/reservations:
+    get:
+      tags:
+      - Utilisateurs
+      summary: Historique des réservations d'un client (OpenFeign)
+      description: "Appelle reservation-service (nom Eureka RENTAL-RESERVATION, GET\
+        \ /internal/reservations?userId=) avec le token du compte de service. Erreurs\
+        \ traduites : introuvable -> 404, service arrêté ou absent d'Eureka -> 503,\
+        \ réponse illisible -> 502. Rôles : ADMIN, AGENT, ou le client lui-même. Tant\
+        \ que RESERVATIONS_MOCK=true, la réponse est simulée avec les réservations\
+        \ de docs/demo-ids.md."
+      operationId: reservations
+      parameters:
+      - name: id
+        in: path
+        description: Identifiant Keycloak du client
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      - name: page
+        in: query
+        description: Numéro de page (à partir de 0)
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+        example: 0
+      - name: size
+        in: query
+        description: Taille de page (1 à 100)
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+        example: 20
+      responses:
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: "Page de réservations {items, page, size, total}"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseReservationDto"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/users/me:
+    get:
+      tags:
+      - Utilisateurs
+      summary: Mon profil
+      description: "Profil de l'utilisateur connecté (id = claim \"sub\" du token),\
+        \ avec adresses et permis. 404 si le profil n'a pas encore été créé."
+      operationId: me
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Profil complet
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
 components:
-  securitySchemes:
-    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
-    Error:
+    AddressRequest:
+      required:
+      - city
+      - street
+      - zipCode
       type: object
-      required: [status, error, message]
       properties:
-        status: { type: integer, example: 409 }
-        error: { type: string, example: CONFLICT }
-        message: { type: string, example: Ce véhicule est déjà réservé sur ces dates }
-        details:
+        street:
+          maxLength: 255
+          minLength: 0
+          type: string
+          example: 12 Rue de Marseille
+        city:
+          maxLength: 100
+          minLength: 0
+          type: string
+          example: Tunis
+        zipCode:
+          pattern: "^[0-9]{4}$"
+          type: string
+          description: "Code postal tunisien : 4 chiffres"
+          example: "1000"
+      description: Création ou modification d'une adresse
+    AddressResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: fa1bace4-042a-4ce2-be5f-d4c3cb4b98da
+        street:
+          type: string
+          example: 12 Rue de Marseille
+        city:
+          type: string
+          example: Tunis
+        zipCode:
+          type: string
+          example: "1000"
+        userId:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+      description: Adresse
+    UpdateUserRequest:
+      required:
+      - active
+      - email
+      - firstname
+      - lastname
+      - role
+      type: object
+      properties:
+        firstname:
+          maxLength: 100
+          minLength: 0
+          type: string
+          example: Client
+        lastname:
+          maxLength: 100
+          minLength: 0
+          type: string
+          example: Un
+        email:
+          maxLength: 255
+          minLength: 0
+          type: string
+          example: client1@test.tn
+        phone:
+          pattern: "^\\+?[0-9]{8,15}$"
+          type: string
+          example: "+21620111111"
+        role:
+          type: string
+          description: Seul un ADMIN peut changer le rôle
+          example: CLIENT
+          enum:
+          - CLIENT
+          - AGENT
+          - ADMIN
+        active:
+          type: boolean
+          description: Seul un ADMIN peut changer le statut
+          example: true
+      description: Modification complète d'un profil (PUT)
+    LicenseResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: edc2e0e3-709d-4caa-b617-53e4c5f128cf
+        userId:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        number:
+          type: string
+          example: TN-2020-000111
+        category:
+          type: string
+          example: B
+        issueDate:
+          type: string
+          format: date
+          example: 2020-03-15
+        expiryDate:
+          type: string
+          format: date
+          example: 2030-03-15
+        verified:
+          type: boolean
+          description: Vérifié par un AGENT ou un ADMIN
+          example: true
+        expired:
+          type: boolean
+          description: "Calculé : date d'expiration dépassée"
+          example: false
+      description: Permis de conduire
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        firstname:
+          type: string
+          example: Client
+        lastname:
+          type: string
+          example: Un
+        email:
+          type: string
+          example: client1@test.tn
+        phone:
+          type: string
+          example: "+21620111111"
+        role:
+          type: string
+          example: CLIENT
+          enum:
+          - CLIENT
+          - AGENT
+          - ADMIN
+        active:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: 2026-11-01T08:00:00Z
+        updatedAt:
+          type: string
+          format: date-time
+          example: 2026-11-01T08:00:00Z
+        license:
+          $ref: "#/components/schemas/LicenseResponse"
+        addresses:
           type: array
           items:
-            type: object
-            properties:
-              field: { type: string }
-              message: { type: string }
-    Page:
+            $ref: "#/components/schemas/AddressResponse"
+      description: "Profil complet : utilisateur, adresses et permis"
+    UpdateLicenseRequest:
+      required:
+      - category
+      - expiryDate
+      - issueDate
+      - number
       type: object
       properties:
-        items: { type: array, items: {} }
-        page: { type: integer, example: 0 }
-        size: { type: integer, example: 20 }
-        total: { type: integer, example: 57 }
-security:
-  - bearerAuth: []
+        number:
+          maxLength: 30
+          minLength: 0
+          type: string
+          example: TN-2020-000111
+        category:
+          pattern: ^(A|A1|B|BE|C|CE|D|D1|DE|H)$
+          type: string
+          example: B
+        issueDate:
+          type: string
+          format: date
+          example: 2020-03-15
+        expiryDate:
+          type: string
+          format: date
+          example: 2030-03-15
+      description: Modification complète d'un permis (PUT). Toute modification annule
+        la vérification.
+    CreateUserRequest:
+      required:
+      - email
+      - firstname
+      - id
+      - lastname
+      - role
+      type: object
+      properties:
+        id:
+          type: string
+          description: Identifiant Keycloak (claim "sub") de l'utilisateur
+          format: uuid
+          example: 2b6c1f0e-7a1d-4f7e-9a51-3c1d2e4f5a6b
+        firstname:
+          maxLength: 100
+          minLength: 0
+          type: string
+          example: Sami
+        lastname:
+          maxLength: 100
+          minLength: 0
+          type: string
+          example: Ben Ali
+        email:
+          maxLength: 255
+          minLength: 0
+          type: string
+          example: sami.benali@test.tn
+        phone:
+          pattern: "^\\+?[0-9]{8,15}$"
+          type: string
+          description: "Facultatif. 8 à 15 chiffres, \"+\" initial autorisé"
+          example: "+21698765432"
+        role:
+          type: string
+          description: "Un utilisateur non ADMIN ne peut créer que son propre profil,\
+            \ avec le rôle CLIENT"
+          example: CLIENT
+          enum:
+          - CLIENT
+          - AGENT
+          - ADMIN
+        active:
+          type: boolean
+          description: "Facultatif, true par défaut"
+          example: true
+      description: Création d'un profil utilisateur
+    CreateLicenseRequest:
+      required:
+      - category
+      - expiryDate
+      - issueDate
+      - number
+      - userId
+      type: object
+      properties:
+        userId:
+          type: string
+          description: Propriétaire du permis
+          format: uuid
+          example: 11c9b774-201e-4a8c-be43-6b084b52f4c7
+        number:
+          maxLength: 30
+          minLength: 0
+          type: string
+          example: TN-2022-000333
+        category:
+          pattern: ^(A|A1|B|BE|C|CE|D|D1|DE|H)$
+          type: string
+          description: "Catégorie : A, A1, B, BE, C, CE, D, D1, DE, H"
+          example: B
+        issueDate:
+          type: string
+          format: date
+          example: 2022-05-10
+        expiryDate:
+          type: string
+          description: "Doit être aujourd'hui ou plus tard, sinon 422"
+          format: date
+          example: 2032-05-10
+      description: Ajout du permis d'un utilisateur (un seul permis par utilisateur)
+    InternalLicense:
+      type: object
+      properties:
+        number:
+          type: string
+          example: TN-2020-000111
+        category:
+          type: string
+          example: B
+        issueDate:
+          type: string
+          format: date
+          example: 2020-03-15
+        expiryDate:
+          type: string
+          format: date
+          example: 2030-03-15
+        verified:
+          type: boolean
+          example: true
+      description: "Permis, ou null si l'utilisateur n'en a pas"
+    InternalUserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        firstname:
+          type: string
+          example: Client
+        lastname:
+          type: string
+          example: Un
+        email:
+          type: string
+          example: client1@test.tn
+        phone:
+          type: string
+          example: "+21620111111"
+        role:
+          type: string
+          example: CLIENT
+          enum:
+          - CLIENT
+          - AGENT
+          - ADMIN
+        active:
+          type: boolean
+          example: true
+        license:
+          $ref: "#/components/schemas/InternalLicense"
+      description: "Utilisateur + permis, pour les autres services (reservation-service)"
+    PageResponseUserSummaryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserSummaryResponse"
+        page:
+          type: integer
+          format: int32
+          example: 0
+        size:
+          type: integer
+          format: int32
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 57
+      description: Liste paginée
+    UserSummaryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        firstname:
+          type: string
+          example: Client
+        lastname:
+          type: string
+          example: Un
+        email:
+          type: string
+          example: client1@test.tn
+        phone:
+          type: string
+          example: "+21620111111"
+        role:
+          type: string
+          example: CLIENT
+          enum:
+          - CLIENT
+          - AGENT
+          - ADMIN
+        active:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: 2026-11-01T08:00:00Z
+      description: Utilisateur dans une liste
+    PageResponseReservationDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReservationDto"
+        page:
+          type: integer
+          format: int32
+          example: 0
+        size:
+          type: integer
+          format: int32
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 57
+      description: Liste paginée
+    ReservationDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8
+        userId:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        vehicleId:
+          type: string
+          format: uuid
+          example: 9f03ab2d-97a5-4c08-a952-dc6e446370d1
+        pickupAgencyId:
+          type: string
+          format: uuid
+          example: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+        returnAgencyId:
+          type: string
+          format: uuid
+          example: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+        startDate:
+          type: string
+          format: date
+          example: 2026-11-20
+        endDate:
+          type: string
+          format: date
+          example: 2026-11-25
+        status:
+          type: string
+          description: "PENDING, CONFIRMED, ONGOING, COMPLETED, CANCELLED"
+          example: CONFIRMED
+        totalPrice:
+          type: number
+          example: 450.0
+        depositAmount:
+          type: number
+          example: 500.0
+        currency:
+          type: string
+          example: TND
+      description: Réservation (copie des données de reservation-service)
+    PageResponseLicenseResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LicenseResponse"
+        page:
+          type: integer
+          format: int32
+          example: 0
+        size:
+          type: integer
+          format: int32
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 57
+      description: Liste paginée
+  responses:
+    BadRequest:
+      description: "Requête invalide (JSON illisible, paramètre ou champ obligatoire\
+        \ manquant)"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 400
+            error: BAD_REQUEST
+            message: Champs obligatoires manquants
+            details:
+            - message: ne doit pas être vide
+              field: firstname
+    Unauthorized:
+      description: Token absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 401
+            error: UNAUTHORIZED
+            message: "Authentification requise : token Bearer absent ou invalide"
+            details: []
+    Forbidden:
+      description: Rôle insuffisant ou ressource d'un autre utilisateur
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 403
+            error: FORBIDDEN
+            message: "Accès refusé : rôle insuffisant ou ressource d'un autre utilisateur"
+            details: []
+    NotFound:
+      description: Objet introuvable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 404
+            error: NOT_FOUND
+            message: "Utilisateur introuvable : f4d1bab3-468d-428d-b02c-b44341430bfd"
+            details: []
+    Conflict:
+      description: Conflit métier (doublon)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 409
+            error: CONFLICT
+            message: Cet email est déjà utilisé
+            details:
+            - message: Cet email est déjà utilisé
+              field: email
+    Unprocessable:
+      description: Règle métier ou format non respecté
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 422
+            error: UNPROCESSABLE_ENTITY
+            message: Données invalides
+            details:
+            - message: Format d'email invalide
+              field: email
+    BadGateway:
+      description: Réponse illisible de reservation-service
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 502
+            error: BAD_GATEWAY
+            message: Réponse illisible de reservation-service
+            details: []
+    ServiceUnavailable:
+      description: reservation-service arrêté ou absent d'Eureka
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 503
+            error: SERVICE_UNAVAILABLE
+            message: reservation-service est indisponible (arrêté ou absent d'Eureka)
+            details: []
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: Token Keycloak (realm location-voitures). Voir le README pour l'obtenir.
+      scheme: bearer
+      bearerFormat: JWT
