@@ -1,0 +1,6 @@
+@ContractService_HostAddress = http://localhost:8105
+
+GET {{ContractService_HostAddress}}/health
+Accept: application/json
+
+###

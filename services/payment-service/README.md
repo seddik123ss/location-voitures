@@ -60,8 +60,8 @@ l'instance est visible sur http://127.0.0.1:8761.
 | `KEYCLOAK_ISSUER` | émetteur des tokens | `http://localhost:8180/realms/location-voitures` |
 | `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | compte de service (appels `/internal`) | `payment-service` / secret du realm |
 | `RABBITMQ_URL` | courtier de messages | `amqp://guest:guest@localhost:5672/%2F` |
-| `AUTH_MODE` | `jwt` (Keycloak) ou `dev` (en-têtes `X-User-Id`/`X-User-Roles`, local uniquement) | `jwt` |
-| `EVENT_PUBLISHER` | `rabbitmq` ou `log` (message seulement journalisé : sans RabbitMQ, ou tant que la file `reservation.payment_succeeded` n'existe pas) | `rabbitmq` |
+| `AUTH_MODE` | `jwt` (Keycloak) ou `dev` (en-têtes `X-User-Id`/`X-User-Roles`, local uniquement : **refusé si `DJANGO_DEBUG=false`**, le service ne démarre pas) | `jwt` |
+| `EVENT_PUBLISHER` | `log` (message seulement journalisé) ou `rabbitmq`. Rester en `log` tant que reservation-service n'a pas déclaré sa file `reservation.payment_succeeded` (sinon chaque paiement réussi reçoit 503) ; passer en `rabbitmq` le jour de l'intégration | `log` |
 | `RESERVATION_CLIENT` | `fake` (simulé) ou `http` (Eureka) | `fake` tant que reservation-service n'est pas prêt |
 
 ### Tests
@@ -70,7 +70,7 @@ l'instance est visible sur http://127.0.0.1:8761.
 python manage.py test payments
 ```
 
-91 tests, sur une vraie base PostgreSQL temporaire (`test_payment_db`, créée puis détruite par Django ;
+96 tests, sur une vraie base PostgreSQL temporaire (`test_payment_db`, créée puis détruite par Django ;
 `payment_svc` doit avoir le droit `CREATEDB`, voir « Dépannage »). Couverture : règles métier et codes HTTP,
 idempotence, rollback quand RabbitMQ est indisponible, concurrence (deux paiements simultanés),
 traduction des erreurs inter-services, traitement des messages officiels de `docs/events/`, validation des
@@ -307,9 +307,11 @@ Tests : `npx ng test --watch=false` (service HTTP et cycle de vie de la clé d'i
 - **`host.docker.internal` injoignable depuis Windows** (mais OK depuis les conteneurs) : l'entrée ajoutée par Docker
   Desktop dans `C:\Windows\System32\drivers\etc\hosts` pointe vers une ancienne adresse IP (changement de réseau) ;
   redémarrer Docker Desktop la met à jour.
-- **Tous les paiements réussis renvoient 503 « Aucune file 'reservation.payment_succeeded' »** : reservation-service
-  n'a pas encore déclaré sa file. Normal tant qu'il n'a jamais été démarré ; pour travailler en attendant,
-  `EVENT_PUBLISHER=log` dans `.env` puis redémarrer le serveur.
+- **Tous les paiements réussis renvoient 503 « Aucune file 'reservation.payment_succeeded' »** : `EVENT_PUBLISHER=rabbitmq`
+  alors que reservation-service n'a pas encore déclaré sa file. Remettre `EVENT_PUBLISHER=log` (valeur par défaut)
+  dans `.env` et redémarrer le serveur ; `rabbitmq` seulement le jour de l'intégration.
+- **Le service refuse de démarrer : « AUTH_MODE=dev est interdit quand DJANGO_DEBUG=false »** : protection voulue
+  (`config/guards.py`) ; utiliser `AUTH_MODE=jwt`, ou `DJANGO_DEBUG=true` en local.
 - **Requêtes lentes (~2 s) vers `localhost` depuis Python** : utiliser `127.0.0.1` (résolution IPv6 puis IPv4 sous Windows).
 - **`Activate.ps1` bloqué** : `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 

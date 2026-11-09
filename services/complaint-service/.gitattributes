@@ -1,2 +1,6 @@
 # Script exécuté par /bin/sh dans le conteneur : toujours en LF, même après un checkout sous Windows.
 *.sh text eol=lf
+
+# Fichier régénéré par Symfony (composer serve, cache:clear) avec des fins de ligne LF : le garder en LF dans la copie
+# de travail, sinon il apparaît modifié sous Windows (core.autocrlf=true) à chaque démarrage du serveur.
+config/reference.php text eol=lf
