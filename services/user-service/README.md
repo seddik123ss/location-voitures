@@ -28,6 +28,22 @@ Vérifier : http://localhost:8101/health doit répondre `{"status":"UP"}`, et `R
 Au démarrage, Flyway crée les tables (`V1__schema.sql`) et charge les données de démo (`V2__demo_data.sql`).
 Ne jamais modifier une migration déjà appliquée : ajouter un fichier `V3__...sql`.
 
+### Lancer dans Docker (démo finale)
+
+Le service a son bloc `user-service` dans [infra/docker-compose.yml](../../infra/docker-compose.yml), sous le profil `services`
+(`docker compose up -d` seul ne lance toujours que l'infrastructure). Le secret vient de `infra/.env` (`USER_KEYCLOAK_CLIENT_SECRET`, voir `infra/.env.example`).
+
+```powershell
+cd infra
+docker compose --profile services up -d --build user-service   # construit l'image (Dockerfile multi-étapes) et la lance sur 8101
+docker compose --profile services stop user-service             # l'arrête (libère le port 8101 pour mvnw)
+```
+
+Ne pas lancer en même temps `mvnw spring-boot:run` et le conteneur : les deux utilisent le port 8101.
+Dans le conteneur : base `mysql:3306`, Eureka `eureka:8761`, clés et token Keycloak par `keycloak:8080`
+(`KEYCLOAK_JWKS`, `KEYCLOAK_TOKEN_URL`) ; l'émetteur attendu reste `http://localhost:8180/realms/location-voitures`.
+`USER_RESERVATIONS_MOCK=false` dans `infra/.env` active le vrai appel OpenFeign.
+
 ### Variables d'environnement (`.env`, non commité)
 
 | Variable | Rôle | Valeur locale |
@@ -37,6 +53,7 @@ Ne jamais modifier une migration déjà appliquée : ajouter un fichier `V3__...
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | base MySQL | `jdbc:mysql://localhost:3306/user_db`, `user_svc`, `user_pwd` |
 | `EUREKA_URL` | serveur Eureka | `http://localhost:8761/eureka` |
 | `KEYCLOAK_ISSUER` | émetteur des tokens | `http://localhost:8180/realms/location-voitures` |
+| `KEYCLOAK_JWKS`, `KEYCLOAK_TOKEN_URL` | facultatives : adresse des clés et du token (Docker : `keycloak:8080`) | absentes en local : déduites de `KEYCLOAK_ISSUER` |
 | `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET` | compte de service pour les appels `/internal` | `user-service`, secret dans Keycloak > Clients > user-service > Credentials |
 | `RESERVATIONS_MOCK` | `true` : historique des réservations simulé ; `false` : vrai appel OpenFeign | `true` tant que la route d'Aziz n'est pas prête |
 
