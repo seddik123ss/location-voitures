@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     keycloak_client_id: str = "ml-service"
     keycloak_client_secret: str = ""
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
+    rabbitmq_enabled: bool = True        # false dans les tests : pas de consommateur RabbitMQ
 
     @property
     def jwks_url(self) -> str:

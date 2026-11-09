@@ -147,7 +147,8 @@ ACTIVATE_DESCRIPTION = (
     "Rend cette version active et désactive l'ancienne dans **une seule transaction** "
     "(une seule version active, garanti aussi par un index unique en base)." + ROLES_NOTE.format(roles="ADMIN"))
 TRAINING_DESCRIPTION = """
-Réentraîne le modèle (environ 2 s) : découpage **60/20/20**, entraînement de LinearRegression,
+Réentraîne le modèle (environ 2 s) sur l'historique synthétique **et les réservations terminées**
+reçues par RabbitMQ (file ml.reservation_completed) : découpage **60/20/20**, entraînement de LinearRegression,
 RandomForest et XGBoost, choix du meilleur et calcul de l'intervalle sur la **validation**,
 métriques finales mesurées sur le **test**.
 

@@ -25,6 +25,8 @@ if "test" not in TEST_DB_URL.rsplit("/", 1)[-1]:
 os.environ["DB_URL"] = TEST_DB_URL
 # Les tests ne s'inscrivent jamais dans Eureka (le TestClient déclenche le démarrage de l'application)
 os.environ["EUREKA_ENABLED"] = "false"
+# ... ni ne consomment de messages RabbitMQ (la logique est testée sans RabbitMQ)
+os.environ["RABBITMQ_ENABLED"] = "false"
 
 import jwt  # noqa: E402  (imports après le réglage de DB_URL, volontairement)
 from alembic import command  # noqa: E402
@@ -60,7 +62,7 @@ def migrated_test_database():
 def reset_database():
     """Avant chaque test : tables vidées, v1 de démo active, prochain numéro de version = 2."""
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE prediction_logs, model_versions"))
+        connection.execute(text("TRUNCATE prediction_logs, model_versions, completed_reservations"))
         connection.execute(
             text("INSERT INTO model_versions (id, name, version, metrics, trained_at, active) "
                  "VALUES (:id, 'XGBoost', 1, CAST(:metrics AS jsonb), '2026-11-09T18:40:09Z', true)"),
@@ -99,7 +101,7 @@ def fast_training(small_dataset_csv, monkeypatch):
     """POST /trainings entraîne sur le petit jeu (moins d'une seconde au lieu de ~2 s)."""
     original_training = model_training.train_new_model_version
     monkeypatch.setattr(model_training, "train_new_model_version",
-                        lambda version: original_training(version, csv_path=small_dataset_csv))
+                        lambda version, **options: original_training(version, csv_path=small_dataset_csv, **options))
 
 
 # ---------- Tokens de test (Keycloak simulé) ----------

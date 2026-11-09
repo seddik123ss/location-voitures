@@ -37,9 +37,13 @@ CANDIDATE_MODELS = {
 }
 
 
-def load_feature_table(csv_path: Path = DATASET_PATH) -> pd.DataFrame:
-    """Lit l'historique brut (CSV) et le transforme en variables + prix cible."""
+def load_feature_table(csv_path: Path = DATASET_PATH,
+                       extra_reservations: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Lit l'historique brut (CSV), y ajoute d'éventuelles réservations réelles (même format),
+    et transforme le tout en variables + prix cible."""
     raw_reservations = pd.read_csv(csv_path)
+    if extra_reservations is not None and not extra_reservations.empty:
+        raw_reservations = pd.concat([raw_reservations, extra_reservations], ignore_index=True)
     return features_from_history(raw_reservations)
 
 
@@ -141,11 +145,13 @@ def compute_occupancy_table(train_features: pd.DataFrame) -> dict:
     return occupancy_table
 
 
-def train_new_model_version(version: int, csv_path: Path = DATASET_PATH) -> dict:
+def train_new_model_version(version: int, csv_path: Path = DATASET_PATH,
+                            extra_reservations: pd.DataFrame | None = None) -> dict:
     """Enchaîne toutes les briques, comme le notebook (utilisé par POST /api/ml/trainings) :
     découpage 60/20/20, entraînement des 3 modèles, choix et intervalle sur la validation,
-    mesure finale sur le test, sauvegarde. Retourne le bundle sauvegardé."""
-    data_splits = split_train_validation_test(load_feature_table(csv_path))
+    mesure finale sur le test, sauvegarde. Retourne le bundle sauvegardé.
+    extra_reservations : réservations terminées reçues par RabbitMQ, ajoutées au CSV synthétique."""
+    data_splits = split_train_validation_test(load_feature_table(csv_path, extra_reservations))
     train_features, train_prices = data_splits["train"]
     validation_features, validation_prices = data_splits["validation"]
     test_features, test_prices = data_splits["test"]

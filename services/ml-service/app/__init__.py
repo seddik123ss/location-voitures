@@ -16,5 +16,8 @@ Un module = un rôle :
 - public_routes.py     : routes /api/ml
 - internal_routes.py   : routes /internal/ml
 
-À venir : eureka_client.py, keycloak_security.py, rabbitmq_consumer.py.
+- eureka_client.py     : inscription dans Eureka (RENTAL-ML)
+- keycloak_security.py : vérification des tokens Keycloak et des rôles
+- completed_reservations.py : réservations terminées -> lignes d'entraînement
+- rabbitmq_consumer.py : consommateur de la file ml.reservation_completed
 """

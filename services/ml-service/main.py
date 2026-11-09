@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from app import api_docs, internal_routes, public_routes
 from app.eureka_client import register_in_eureka, unregister_from_eureka
 from app.error_handlers import register_error_handlers
+from app.rabbitmq_consumer import start_consumer, stop_consumer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
 
@@ -17,7 +18,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 async def lifespan(application: FastAPI):
     """Avant « yield » : au démarrage du serveur. Après : à son arrêt."""
     await register_in_eureka()
+    await start_consumer()          # file RabbitMQ ml.reservation_completed
     yield
+    await stop_consumer()
     await unregister_from_eureka()
 
 

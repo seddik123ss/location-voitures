@@ -1,8 +1,11 @@
 """Tables de la base ml_db (SQLAlchemy). Nommé db_tables pour ne pas confondre avec le modèle ML."""
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Sequence, String, Uuid, text
+from sqlalchemy import (
+    Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, Numeric, Sequence, String, Uuid, text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,3 +50,25 @@ class PredictionLog(Base):
     model_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("model_versions.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class CompletedReservation(Base):
+    """Réservation terminée reçue par RabbitMQ (événement ReservationCompleted) = une ligne d'entraînement.
+    Mêmes informations que le CSV synthétique, pour entraîner sur les deux ensemble."""
+    __tablename__ = "completed_reservations"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # Idempotence : un même eventId n'est enregistré qu'une fois (contrainte unique en base)
+    event_id: Mapped[uuid.UUID] = mapped_column(Uuid, unique=True)
+    reservation_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    category_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    booked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    total_price: Mapped[Decimal] = mapped_column(Numeric(12, 3))      # TND, 3 décimales
+    daily_price: Mapped[Decimal] = mapped_column(Numeric(12, 3))      # totalPrice / durée
+    # L'événement ne contient pas l'occupation : estimée (moyenne agence x saison du modèle actif)
+    occupancy_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    occupancy_estimated: Mapped[bool] = mapped_column(Boolean, default=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

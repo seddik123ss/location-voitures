@@ -11,7 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, Path, Query, Response
 from sqlalchemy.orm import Session
 
-from app import api_docs, model_registry, model_training, price_predictor
+from app import api_docs, completed_reservations, model_registry, model_training, price_predictor
 from app.api_schemas import (
     ModelVersionPage, ModelVersionResponse, ModelVersionUpdateRequest,
     PricePredictionRequest, PricePredictionResponse,
@@ -88,7 +88,9 @@ def activate_model(model_id: ModelId, session: Session = Depends(get_db_session)
              responses={201: api_docs.TRAINING_CREATED})
 def create_training(response: Response, session: Session = Depends(get_db_session)):
     version = model_registry.next_version_number(session)
-    model_bundle = model_training.train_new_model_version(version)
+    # Historique synthétique + réservations réelles terminées (reçues par RabbitMQ)
+    real_reservations = completed_reservations.load_training_rows(session)
+    model_bundle = model_training.train_new_model_version(version, extra_reservations=real_reservations)
     model_version = model_registry.register_model_version(session, model_bundle)
     response.headers["Location"] = f"/api/ml/models/{model_version.id}"
     return model_version
