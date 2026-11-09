@@ -5,7 +5,7 @@
 | --- | --- | --- | --- | --- | --- |
 | Montassar | user-service | Spring Boot 3.3.13 | 8101 | MySQL user_db | RENTAL-USER |
 | Yosra | vehicle-service | Next.js | 8102 | MySQL vehicle_db | RENTAL-VEHICLE |
-| Aziz | reservation-service | Laravel 11 | 8103 | MySQL reservation_db | RENTAL-RESERVATION |
+| Aziz | reservation-service | Laravel 12 | 8103 | MySQL reservation_db | RENTAL-RESERVATION |
 | Fadi | payment-service | Django REST | 8104 | PostgreSQL payment_db | RENTAL-PAYMENT |
 | Rania | contract-service | ASP.NET Core 8 | 8105 | PostgreSQL contract_db | RENTAL-CONTRACT |
 | Seddik | complaint-service | Symfony 7 | 8106 | MySQL complaint_db | RENTAL-COMPLAINT |

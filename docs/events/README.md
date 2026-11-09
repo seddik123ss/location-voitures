@@ -16,7 +16,7 @@ Les fichiers `<NomDuMessage>.json` de ce dossier sont des exemples complets, ave
 | payment.reservation_cancelled | reservation -> payment | ReservationCancelled | un REFUND par paiement SUCCEEDED de la réservation, l'original passe en REFUNDED | dans la transaction de l'annulation |
 | vehicle.contract_events | contract -> vehicle | VehicleHandedOver, VehicleReturned | statut RENTED / AVAILABLE + kilométrage | dans la transaction |
 | payment.return_settled | contract -> payment | ReturnSettled | un EXTRA_FEE en PENDING par frais ; REFUND de la caution (`depositToRelease`), DEPOSIT -> REFUNDED | dans la transaction |
-| reservation.contract_closed | contract -> reservation | ContractClosed | réservation -> COMPLETED | best effort (log si RabbitMQ absent) |
+| reservation.contract_closed | contract -> reservation | ContractClosed | réservation -> COMPLETED, en passant par ONGOING si elle est encore CONFIRMED. Aucun message ne met une réservation en ONGOING : un AGENT le fait via l'API (`PATCH /api/reservations/{id}/status`) à la remise du véhicule | best effort (log si RabbitMQ absent) |
 | ml.reservation_completed | reservation -> ml | ReservationCompleted | ligne ajoutée au jeu d'entraînement | best effort |
 
 ## Contenu de `data`
