@@ -1,0 +1,37 @@
+{
+  "name": "vehicle-service",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 8102",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 8102",
+    "seed": "prisma db seed",
+    "consumer": "tsx --env-file=.env consumer/index.ts",
+    "event": "tsx --env-file=.env consumer/publish.ts",
+    "test": "vitest run"    
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "amqplib": "^2.3.1",
+    "eureka-js-client": "^4.5.0",
+    "jose": "^6.2.17",
+    "next": "^16.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.8",
+    "@types/eureka-js-client": "^4.5.9",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "prisma": "^6.19.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

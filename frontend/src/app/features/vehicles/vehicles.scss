@@ -1,0 +1,64 @@
+// Styles du module Véhicules (variables de src/styles.scss), même charte que les autres modules.
+:host { display: block; padding: 24px 32px; max-width: 1100px; }
+
+h1 { margin: 0 0 4px; font-size: 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+h2 { font-size: 16px; margin: 0 0 12px; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.back { display: inline-block; margin-bottom: 12px; color: var(--muted); text-decoration: none; font-size: 14px; }
+
+.card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.empty { color: var(--muted); text-align: center; }
+
+.btn {
+  border: 1px solid var(--border); background: #fff; color: inherit; border-radius: 8px;
+  padding: 8px 14px; cursor: pointer; font: inherit; text-decoration: none; display: inline-block;
+  &:disabled { opacity: 0.5; cursor: default; }
+  &.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  &.danger { color: #b91c1c; border-color: #fecaca; }
+  &.small { padding: 4px 10px; font-size: 13px; }
+}
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+input, select {
+  font: inherit; color: #0f172a; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: #fff;
+}
+.invalid { color: #b91c1c; font-size: 13px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; label { min-width: 150px; } }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-bottom: 16px; }
+
+.alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.alert.ok { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.vcard {
+  display: block; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+  color: inherit; text-decoration: none; transition: box-shadow 0.15s;
+  &:hover { box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08); }
+  .title { font-weight: 700; font-size: 16px; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 4px; }
+}
+.row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; }
+.price { font-size: 18px; font-weight: 700; color: var(--primary); white-space: nowrap; small { font-size: 12px; font-weight: 400; color: var(--muted); } }
+dl.specs {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; margin: 0;
+  dt { color: var(--muted); font-size: 12px; }
+  dd { margin: 2px 0 0; font-weight: 600; }
+}
+
+table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+
+.pager { display: flex; align-items: center; gap: 8px; justify-content: flex-end; color: var(--muted); font-size: 13px; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.s-AVAILABLE { background: #dcfce7; color: #166534; }
+.s-RENTED { background: #fef3c7; color: #92400e; }
+.s-MAINTENANCE { background: #dbeafe; color: #1e40af; }
+.s-OUT_OF_SERVICE { background: #f1f5f9; color: #475569; }
+
+.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
