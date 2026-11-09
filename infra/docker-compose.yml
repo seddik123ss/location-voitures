@@ -16,6 +16,22 @@ x-complaint-env: &complaint-env
   LOOKUP_MODE: ${COMPLAINT_LOOKUP_MODE:-demo}
   RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
 
+# Variables communes aux conteneurs de reservation-service (profil "services").
+x-reservation-env: &reservation-env
+  DB_CONNECTION: mysql
+  DB_URL: mysql://reservation_svc:reservation_pwd@mysql:3306/reservation_db
+  EUREKA_URL: http://eureka:8761/eureka
+  SERVICE_HOST: host.docker.internal
+  SERVICE_PORT: "8103"
+  # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
+  KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+  KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+  KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
+  KEYCLOAK_CLIENT_ID: reservation-service
+  KEYCLOAK_CLIENT_SECRET: ${RESERVATION_KEYCLOAK_CLIENT_SECRET:-}
+  RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+  LOOKUP_MODE: ${RESERVATION_LOOKUP_MODE:-demo}
+
 services:
   mysql:
     image: mysql:8.4
@@ -114,6 +130,43 @@ services:
     depends_on: [mysql, eureka, keycloak]
     # MySQL peut être encore en démarrage au premier lancement : on relance le service s'il échoue.
     restart: on-failure
+    stop_grace_period: 15s
+
+  # docker compose --profile services up -d --build reservation-service reservation-eureka reservation-consumer
+  # Une image, trois conteneurs : API (migrations + données de démo si la base est vide), Eureka, consommateur RabbitMQ.
+  reservation-service:
+    profiles: [services]
+    build:
+      context: ../services/reservation-service
+      additional_contexts:
+        shared: ../shared
+    image: location-voitures/reservation-service
+    ports: ["8103:8103"]
+    environment: *reservation-env
+    depends_on: [mysql, eureka, keycloak, rabbitmq]
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8103/health') === false ? 1 : 0);"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+  reservation-eureka:
+    profiles: [services]
+    image: location-voitures/reservation-service
+    command: ["php", "artisan", "eureka:run"]
+    environment: *reservation-env
+    depends_on:
+      reservation-service:
+        condition: service_healthy
+    stop_grace_period: 15s
+  reservation-consumer:
+    profiles: [services]
+    image: location-voitures/reservation-service
+    command: ["php", "artisan", "rabbitmq:consume"]
+    environment: *reservation-env
+    depends_on:
+      reservation-service:
+        condition: service_healthy
     stop_grace_period: 15s
 volumes:
   mysql-data: {}

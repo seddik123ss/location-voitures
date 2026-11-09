@@ -1,0 +1,29 @@
+# Reconstruits dans l'image
+vendor/
+bootstrap/cache/*.php
+storage/api-docs/
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+database/*.sqlite
+
+# Configuration locale et secrets : les variables viennent de docker-compose
+.env
+.env.backup
+.env.production
+
+# Tests et outils de développement
+tests/
+phpunit.xml
+.phpunit.cache/
+.phpunit.result.cache
+scripts/
+
+# Divers
+.git
+.gitignore
+.editorconfig
+Dockerfile
+.dockerignore
+*.md
