@@ -11,13 +11,17 @@ use Throwable;
  */
 class ApiException extends RuntimeException
 {
-    /** @param list<array{field: string, message: string}> $details */
+    /**
+     * @param list<array{field: string, message: string}> $details
+     * @param array<string, string> $headers en-têtes ajoutés à la réponse (ex. WWW-Authenticate)
+     */
     public function __construct(
         public readonly int $status,
         public readonly string $error,
         string $message,
         public readonly array $details = [],
         ?Throwable $previous = null,
+        public readonly array $headers = [],
     ) {
         parent::__construct($message, 0, $previous);
     }
@@ -29,7 +33,12 @@ class ApiException extends RuntimeException
 
     public static function unauthorized(string $message = 'Authentification requise'): self
     {
-        return new self(401, 'UNAUTHORIZED', $message);
+        return new self(401, 'UNAUTHORIZED', $message, [], null, ['WWW-Authenticate' => 'Bearer']);
+    }
+
+    public static function invalidToken(string $message): self
+    {
+        return new self(401, 'UNAUTHORIZED', $message, [], null, ['WWW-Authenticate' => 'Bearer error="invalid_token"']);
     }
 
     public static function forbidden(string $message = 'Accès refusé'): self

@@ -52,7 +52,12 @@ final class ApiExceptionRenderer
             $body['details'] = $details;
         }
 
-        return new JsonResponse($body, $status, [CorrelationId::HEADER => CorrelationId::current()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $headers = [CorrelationId::HEADER => CorrelationId::current()];
+        if ($e instanceof ApiException) {
+            $headers += $e->headers;
+        }
+
+        return new JsonResponse($body, $status, $headers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /** @return list<array{field: string, message: string}> */
