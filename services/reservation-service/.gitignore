@@ -25,3 +25,6 @@ Thumbs.db
 
 # Base SQLite locale éventuelle
 /database/*.sqlite
+
+# Contrat OpenAPI généré par l5-swagger (exporté dans docs/openapi par composer openapi:dump)
+/storage/api-docs

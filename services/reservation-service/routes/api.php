@@ -14,6 +14,7 @@ Route::prefix('api/reservations')
     ->group(function () {
         Route::get('/', 'index');
         Route::post('/', 'store');
+        Route::post('/quote', 'quote');
         Route::get('/{id}', 'show');
         Route::put('/{id}', 'update');
         Route::post('/{id}/cancel', 'cancel');

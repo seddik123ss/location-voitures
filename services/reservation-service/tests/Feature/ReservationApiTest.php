@@ -233,6 +233,48 @@ class ReservationApiTest extends TestCase
         $this->assertError($this->book(['userId' => DemoIds::CLIENT1], self::agent()), 409, 'CONFLICT');
     }
 
+    // ---------------------------------------------------------------- devis
+
+    public function test_devis_sans_creation_prix_fixe_sans_ml_en_mode_demo(): void
+    {
+        $response = $this->api('POST', '/api/reservations/quote', self::client1(), [
+            'vehicleId' => DemoIds::V4, 'startDate' => '2026-12-01', 'endDate' => '2026-12-04', 'returnAgencyId' => DemoIds::AG_SOUSSE,
+        ]);
+
+        $response->assertOk()->assertExactJson([
+            'vehicleId' => DemoIds::V4,
+            'categoryId' => DemoIds::CAT_SUV,
+            'categoryName' => 'SUV',
+            'pickupAgencyId' => DemoIds::AG_TUNIS,
+            'returnAgencyId' => DemoIds::AG_SOUSSE,
+            'startDate' => '2026-12-01',
+            'endDate' => '2026-12-04',
+            'days' => 3,
+            'dailyRate' => 160.0,
+            'totalPrice' => 480.0,
+            'depositAmount' => 1000.0,
+            'currency' => 'TND',
+            'suggestedPrice' => null,
+        ]);
+        $this->assertStringContainsString('"dailyRate":160.000,"totalPrice":480.000,"depositAmount":1000.000', $response->getContent());
+        $this->assertSame(3, Reservation::count());
+    }
+
+    public function test_devis_applique_les_regles_de_creation(): void
+    {
+        $this->assertError($this->api('POST', '/api/reservations/quote', self::client2(), [
+            'vehicleId' => DemoIds::V4, 'startDate' => '2026-12-01', 'endDate' => '2026-12-04',
+        ]), 422, 'UNPROCESSABLE_ENTITY', 'expire le 2026-06-30');
+        $this->assertError($this->api('POST', '/api/reservations/quote', self::client1(), [
+            'vehicleId' => DemoIds::V1, 'startDate' => '2026-12-12', 'endDate' => '2026-12-14',
+        ]), 409, 'CONFLICT', 'déjà réservé');
+        $this->assertError($this->api('POST', '/api/reservations/quote', self::client1(), [
+            'vehicleId' => DemoIds::V6, 'startDate' => '2026-12-01', 'endDate' => '2026-12-02',
+        ]), 409, 'CONFLICT', 'MAINTENANCE');
+        $this->assertError($this->api('POST', '/api/reservations/quote', self::client1(), ['vehicleId' => DemoIds::V4]), 400, 'BAD_REQUEST', null, ['startDate', 'endDate']);
+        $this->assertError($this->api('POST', '/api/reservations/quote', null, []), 401, 'UNAUTHORIZED');
+    }
+
     // ---------------------------------------------------------------- lecture
 
     public function test_liste_d_un_client_seulement_ses_reservations(): void

@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\ApiException;
 use App\Exceptions\ApiExceptionRenderer;
 use App\Http\Middleware\AuthenticateKeycloak;
 use App\Http\Middleware\CorrelationId;
@@ -23,6 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Erreurs prévues (règles métier, 502 / 503 d'un autre service) : pas de trace dans le log,
+        // leur cause y est déjà écrite là où elles sont levées. Laravel journalise les autres.
+        $exceptions->dontReport(ApiException::class);
         // Toutes les erreurs au format commun {status, error, message, details}.
         $exceptions->render(fn (Throwable $e) => ApiExceptionRenderer::render($e));
     })->create();

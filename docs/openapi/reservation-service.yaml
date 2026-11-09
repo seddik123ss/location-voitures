@@ -1,35 +1,1250 @@
-﻿openapi: 3.0.3
+openapi: 3.0.0
 info:
   title: reservation-service
-  version: 0.1.0
+  description: "Réservations de véhicules de la plateforme de location (module d'Aziz, Laravel).\n\nUn client réserve un véhicule sur une période : le service vérifie son permis (user-service) et le véhicule (vehicle-service), calcule le prix (jours x dailyRate de la catégorie), puis suit la réservation jusqu'à la fin de la location.\n\nRôles (claim `roles` du token Keycloak, realm location-voitures) : CLIENT ne voit et ne gère que ses réservations ; AGENT et ADMIN voient tout et changent les statuts ; ADMIN supprime ; INTERNAL (comptes de service) pour /internal/**.\n\nFormats communs (docs/conventions.md) : JSON camelCase, UUID v4, dates YYYY-MM-DD, instants ISO 8601 UTC, montants à 3 décimales en TND, erreurs {status, error, message, details}, en-tête X-Correlation-Id."
+  version: 1.0.0
 servers:
-  - url: http://localhost:8088
-    description: via la Gateway
-paths: {}
+  -
+    url: 'http://localhost:8088'
+    description: 'via la Gateway (routes /api/reservations/**)'
+  -
+    url: 'http://localhost:8103'
+    description: 'direct (développement ; seul accès aux routes /internal)'
+paths:
+  /health:
+    get:
+      tags:
+        - Santé
+      summary: 'État du service'
+      description: 'Public. Utilisé par Eureka (healthCheckUrl).'
+      operationId: health
+      responses:
+        200:
+          description: 'Service démarré'
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    example: UP
+                type: object
+      security: []
+  '/internal/reservations/{id}':
+    get:
+      tags:
+        - Interne
+      summary: 'Réservation pour un autre service'
+      description: 'Appelée par payment-service (avant chaque paiement : totalPrice = paiement RENTAL, depositAmount = paiement DEPOSIT), contract-service et complaint-service. Jamais exposée par la Gateway.'
+      operationId: internalGetReservation
+      parameters:
+        -
+          $ref: '#/components/parameters/ReservationId'
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      responses:
+        200:
+          description: 'Réservation (format de docs/internal-api.md)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalReservation'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          description: 'Token sans le rôle INTERNAL'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Rôle requis : INTERNAL'
+        404:
+          $ref: '#/components/responses/NotFound'
+      security:
+        -
+          bearerAuth: []
+  /internal/reservations:
+    get:
+      tags:
+        - Interne
+      summary: 'Réservations d\x27un utilisateur'
+      description: 'Liste paginée, plus récentes d\x27abord. Appelée par user-service (OpenFeign) pour l\x27historique d\x27un client.'
+      operationId: internalListReservationsByUser
+      parameters:
+        -
+          name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        -
+          $ref: '#/components/parameters/Page'
+        -
+          $ref: '#/components/parameters/Size'
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      responses:
+        200:
+          description: 'Page de réservations'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalReservationPage'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          description: 'Token sans le rôle INTERNAL'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Rôle requis : INTERNAL'
+      security:
+        -
+          bearerAuth: []
+  /internal/reservations/active:
+    get:
+      tags:
+        - Interne
+      summary: 'Réservations actives d\x27un véhicule'
+      description: 'Réservations PENDING, CONFIRMED ou ONGOING du véhicule (elles le bloquent). Appelée par vehicle-service avant de retirer un véhicule ou de le passer hors service.'
+      operationId: internalActiveReservations
+      parameters:
+        -
+          name: vehicleId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: ecdcc60f-ed6a-4007-8622-2b568338ef7a
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      responses:
+        200:
+          description: 'Réservations actives'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveReservations'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          description: 'Token sans le rôle INTERNAL'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Rôle requis : INTERNAL'
+      security:
+        -
+          bearerAuth: []
+  /api/reservations:
+    get:
+      tags:
+        - Réservations
+      summary: 'Lister les réservations'
+      description: "Liste paginée, plus récentes d'abord (date de début décroissante). Un CLIENT ne voit que les siennes (filtrer sur un autre userId : 403) ; AGENT et ADMIN voient tout et peuvent filtrer."
+      operationId: listReservations
+      parameters:
+        -
+          $ref: '#/components/parameters/Page'
+        -
+          $ref: '#/components/parameters/Size'
+        -
+          name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ReservationStatus'
+        -
+          name: userId
+          in: query
+          description: 'Client (AGENT, ADMIN ; un CLIENT ne peut donner que son propre id)'
+          required: false
+          schema:
+            type: string
+            format: uuid
+        -
+          name: vehicleId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      responses:
+        200:
+          description: 'Page de réservations (sans statusHistory)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationPage'
+              example:
+                items:
+                  -
+                    id: 01cb68ad-4eec-4bdd-8971-ce35381c59d1
+                    userId: f4d1bab3-468d-428d-b02c-b44341430bfd
+                    vehicleId: ecdcc60f-ed6a-4007-8622-2b568338ef7a
+                    pickupAgencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+                    returnAgencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+                    startDate: '2026-12-10'
+                    endDate: '2026-12-13'
+                    status: PENDING
+                    totalPrice: 270
+                    depositAmount: 500
+                    currency: TND
+                    categoryId: 94236cd0-16fc-41e0-bfc2-c8b1d2c8b1fc
+                    allowedTransitions:
+                      - CONFIRMED
+                      - CANCELLED
+                    createdAt: '2026-11-09T08:00:00Z'
+                    updatedAt: '2026-11-09T08:00:00Z'
+                page: 0
+                size: 1
+                total: 2
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          description: 'Rôle absent, ou CLIENT qui filtre sur un autre client'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Un client ne peut voir que ses propres réservations'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - Réservations
+      summary: 'Réserver un véhicule'
+      description: "Crée une réservation PENDING. Contrôles, dans l'ordre : dates (400) ; client existant (404) ; compte actif, permis vérifié et valide jusqu'à endDate (422) ; véhicule existant (404), ni MAINTENANCE ni OUT_OF_SERVICE (409) ; agence de départ = agence du véhicule (422) ; pas de chevauchement avec une réservation PENDING, CONFIRMED ou ONGOING du véhicule (409). totalPrice = (endDate - startDate) jours x dailyRate de la catégorie ; depositAmount = caution de la catégorie."
+      operationId: createReservation
+      parameters:
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservation'
+            examples:
+              client:
+                summary: 'Un CLIENT réserve pour lui-même'
+                value:
+                  vehicleId: 2657e174-f016-4f0c-9485-0c63141432e3
+                  startDate: '2026-12-01'
+                  endDate: '2026-12-04'
+                  returnAgencyId: 1deb1dea-ab54-436d-8ed7-c3322f782c88
+              agent:
+                summary: 'Un AGENT réserve pour un client'
+                value:
+                  vehicleId: 2657e174-f016-4f0c-9485-0c63141432e3
+                  startDate: '2026-12-01'
+                  endDate: '2026-12-04'
+                  userId: f4d1bab3-468d-428d-b02c-b44341430bfd
+      responses:
+        201:
+          description: 'Réservation créée'
+          headers:
+            Location:
+              description: 'URL de la réservation'
+              schema:
+                type: string
+                example: /api/reservations/85269ec7-71f4-4963-a863-426b7b1318c6
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+              example:
+                id: 85269ec7-71f4-4963-a863-426b7b1318c6
+                userId: f4d1bab3-468d-428d-b02c-b44341430bfd
+                vehicleId: 2657e174-f016-4f0c-9485-0c63141432e3
+                pickupAgencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+                returnAgencyId: 1deb1dea-ab54-436d-8ed7-c3322f782c88
+                startDate: '2026-12-01'
+                endDate: '2026-12-04'
+                status: PENDING
+                totalPrice: 480
+                depositAmount: 1000
+                currency: TND
+                categoryId: a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c
+                allowedTransitions:
+                  - CONFIRMED
+                  - CANCELLED
+                createdAt: '2026-11-09T10:00:00Z'
+                updatedAt: '2026-11-09T10:00:00Z'
+                statusHistory:
+                  -
+                    fromStatus: null
+                    toStatus: PENDING
+                    changedAt: '2026-11-09T10:00:00Z'
+                    changedBy: f4d1bab3-468d-428d-b02c-b44341430bfd
+                    comment: null
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          description: 'CLIENT qui réserve pour un autre'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Un client ne peut réserver que pour lui-même'
+        404:
+          description: 'Client ou véhicule introuvable'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                client:
+                  summary: 'Client inconnu de user-service'
+                  value:
+                    status: 404
+                    error: NOT_FOUND
+                    message: 'Client introuvable'
+                vehicule:
+                  summary: 'Véhicule inconnu de vehicle-service'
+                  value:
+                    status: 404
+                    error: NOT_FOUND
+                    message: 'Véhicule introuvable'
+        409:
+          description: 'Véhicule hors service ou déjà réservé'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                chevauchement:
+                  summary: 'Véhicule déjà réservé'
+                  value:
+                    status: 409
+                    error: CONFLICT
+                    message: 'Ce véhicule est déjà réservé sur ces dates'
+                    details:
+                      -
+                        field: startDate
+                        message: 'Déjà réservé du 2026-12-10 au 2026-12-13'
+                maintenance:
+                  summary: 'Véhicule en maintenance'
+                  value:
+                    status: 409
+                    error: CONFLICT
+                    message: "Ce véhicule n'est pas réservable (statut MAINTENANCE)"
+                    details:
+                      -
+                        field: vehicleId
+                        message: 'Véhicule en MAINTENANCE'
+        422:
+          description: 'Permis ou compte du client, agence de départ'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                permisExpire:
+                  summary: 'Permis expiré (client2)'
+                  value:
+                    status: 422
+                    error: UNPROCESSABLE_ENTITY
+                    message: 'Le permis du client expire le 2026-06-30, avant la fin de la location (2026-12-04)'
+                    details:
+                      -
+                        field: endDate
+                        message: "Permis valide jusqu'au 2026-06-30"
+                sansPermis:
+                  summary: 'Aucun permis enregistré'
+                  value:
+                    status: 422
+                    error: UNPROCESSABLE_ENTITY
+                    message: "Le client n'a pas de permis de conduire enregistré"
+                    details:
+                      -
+                        field: license
+                        message: 'Permis absent'
+        502:
+          $ref: '#/components/responses/BadGateway'
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        -
+          bearerAuth: []
+  '/api/reservations/{id}':
+    get:
+      tags:
+        - Réservations
+      summary: "Détail d'une réservation"
+      description: "Avec l'historique des statuts et les transitions possibles. Propriétaire, AGENT ou ADMIN."
+      operationId: getReservation
+      parameters:
+        -
+          $ref: '#/components/parameters/ReservationId'
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      responses:
+        200:
+          description: Réservation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+              example:
+                id: 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8
+                userId: f4d1bab3-468d-428d-b02c-b44341430bfd
+                vehicleId: 9f03ab2d-97a5-4c08-a952-dc6e446370d1
+                pickupAgencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+                returnAgencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+                startDate: '2026-11-20'
+                endDate: '2026-11-25'
+                status: CONFIRMED
+                totalPrice: 450
+                depositAmount: 500
+                currency: TND
+                categoryId: 94236cd0-16fc-41e0-bfc2-c8b1d2c8b1fc
+                allowedTransitions:
+                  - ONGOING
+                  - CANCELLED
+                createdAt: '2026-11-08T14:00:00Z'
+                updatedAt: '2026-11-08T14:30:00Z'
+                statusHistory:
+                  -
+                    fromStatus: null
+                    toStatus: PENDING
+                    changedAt: '2026-11-08T14:00:00Z'
+                    changedBy: f4d1bab3-468d-428d-b02c-b44341430bfd
+                    comment: null
+                  -
+                    fromStatus: PENDING
+                    toStatus: CONFIRMED
+                    changedAt: '2026-11-08T14:30:00Z'
+                    changedBy: null
+                    comment: 'Paiement RENTAL reçu'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        404:
+          $ref: '#/components/responses/NotFound'
+      security:
+        -
+          bearerAuth: []
+    put:
+      tags:
+        - Réservations
+      summary: "Modifier les dates d'une réservation"
+      description: "Remplace les dates et l'agence de retour d'une réservation PENDING (409 sinon). Le permis, le véhicule et le chevauchement sont contrôlés à nouveau et le prix est recalculé. Le client, le véhicule et l'agence de départ ne changent pas."
+      operationId: updateReservation
+      parameters:
+        -
+          $ref: '#/components/parameters/ReservationId'
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReservation'
+      responses:
+        200:
+          description: 'Réservation modifiée'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        404:
+          $ref: '#/components/responses/NotFound'
+        409:
+          description: "Réservation qui n'est plus PENDING, ou nouvelles dates déjà prises"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 409
+                error: CONFLICT
+                message: 'Seule une réservation PENDING peut être modifiée (statut actuel : CONFIRMED)'
+                details:
+                  -
+                    field: status
+                    message: 'Annulez la réservation puis créez-en une nouvelle'
+        422:
+          description: 'Permis expiré avant la nouvelle date de retour'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        502:
+          $ref: '#/components/responses/BadGateway'
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        -
+          bearerAuth: []
+    delete:
+      tags:
+        - Réservations
+      summary: 'Supprimer une réservation annulée (ADMIN)'
+      description: 'Suppression définitive, avec son historique. Seulement une réservation CANCELLED : les autres sont référencées par les paiements, contrats et réclamations.'
+      operationId: deleteReservation
+      parameters:
+        -
+          $ref: '#/components/parameters/ReservationId'
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      responses:
+        204:
+          description: Supprimée
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          description: 'Rôle ADMIN requis'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Rôle requis : ADMIN'
+        404:
+          $ref: '#/components/responses/NotFound'
+        409:
+          description: 'Réservation non annulée'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 409
+                error: CONFLICT
+                message: 'Seule une réservation CANCELLED peut être supprimée (statut actuel : COMPLETED)'
+                details:
+                  -
+                    field: status
+                    message: "Les paiements, contrats et réclamations s'y réfèrent encore"
+      security:
+        -
+          bearerAuth: []
+  /api/reservations/quote:
+    post:
+      tags:
+        - Réservations
+      summary: "Calculer le prix d'une réservation (devis)"
+      description: 'Applique les mêmes contrôles que la création (dates, client, permis, véhicule, chevauchement) sans rien créer. Renvoie le prix fixe facturé (jours x dailyRate) et le prix conseillé par ml-service (RENTAL-ML), ou null si le modèle est indisponible.'
+      operationId: quoteReservation
+      parameters:
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservation'
+            example:
+              vehicleId: 2657e174-f016-4f0c-9485-0c63141432e3
+              startDate: '2026-12-01'
+              endDate: '2026-12-04'
+      responses:
+        200:
+          description: Devis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+              example:
+                vehicleId: 2657e174-f016-4f0c-9485-0c63141432e3
+                categoryId: a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c
+                categoryName: SUV
+                pickupAgencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+                returnAgencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+                startDate: '2026-12-01'
+                endDate: '2026-12-04'
+                days: 3
+                dailyRate: 160
+                totalPrice: 480
+                depositAmount: 1000
+                currency: TND
+                suggestedPrice:
+                  dailyPrice: 152.5
+                  totalPrice: 457.5
+                  lowerBound: 140
+                  upperBound: 171.25
+                  modelVersion: v1-2026-11
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          description: 'Client ou véhicule introuvable'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 404
+                error: NOT_FOUND
+                message: 'Véhicule introuvable'
+        409:
+          description: 'Véhicule hors service ou déjà réservé'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 409
+                error: CONFLICT
+                message: 'Ce véhicule est déjà réservé sur ces dates'
+                details:
+                  -
+                    field: startDate
+                    message: 'Déjà réservé du 2026-12-10 au 2026-12-13'
+        422:
+          description: 'Permis absent, non vérifié ou expiré'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 422
+                error: UNPROCESSABLE_ENTITY
+                message: 'Le permis du client expire le 2026-06-30, avant la fin de la location (2026-12-04)'
+                details:
+                  -
+                    field: endDate
+                    message: "Permis valide jusqu'au 2026-06-30"
+        502:
+          $ref: '#/components/responses/BadGateway'
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        -
+          bearerAuth: []
+  '/api/reservations/{id}/cancel':
+    post:
+      tags:
+        - Réservations
+      summary: 'Annuler une réservation'
+      description: "Possible seulement en PENDING ou CONFIRMED (409 sinon). Le message ReservationCancelled est publié vers payment-service (remboursements) dans la même transaction : si RabbitMQ ne le confirme pas, rien n'est annulé (503)."
+      operationId: cancelReservation
+      parameters:
+        -
+          $ref: '#/components/parameters/ReservationId'
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelReservation'
+      responses:
+        200:
+          description: 'Réservation annulée'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        404:
+          $ref: '#/components/responses/NotFound'
+        409:
+          description: 'Réservation ONGOING, COMPLETED ou déjà annulée'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 409
+                error: CONFLICT
+                message: 'Annulation impossible : la réservation est COMPLETED (seulement en PENDING ou CONFIRMED)'
+                details:
+                  -
+                    field: status
+                    message: 'Statut COMPLETED final : aucune transition possible'
+        503:
+          description: 'RabbitMQ indisponible ou file de payment-service absente'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 503
+                error: SERVICE_UNAVAILABLE
+                message: "Annulation impossible pour le moment : La file payment.reservation_cancelled n'existe pas encore dans RabbitMQ (son consommateur ne l'a pas déclarée) : ReservationCancelled non publié"
+      security:
+        -
+          bearerAuth: []
+  '/api/reservations/{id}/status':
+    patch:
+      tags:
+        - Réservations
+      summary: 'Changer le statut (AGENT, ADMIN)'
+      description: 'Transitions autorisées : PENDING -> CONFIRMED ou CANCELLED ; CONFIRMED -> ONGOING (remise du véhicule) ou CANCELLED ; ONGOING -> COMPLETED. COMPLETED et CANCELLED sont finaux. CANCELLED publie ReservationCancelled, COMPLETED publie ReservationCompleted.'
+      operationId: changeReservationStatus
+      parameters:
+        -
+          $ref: '#/components/parameters/ReservationId'
+        -
+          $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatus'
+            example:
+              status: ONGOING
+              comment: 'Véhicule remis au client'
+      responses:
+        200:
+          description: 'Statut changé'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          description: 'Rôle AGENT ou ADMIN requis'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Rôle requis : AGENT ou ADMIN'
+        404:
+          $ref: '#/components/responses/NotFound'
+        409:
+          $ref: '#/components/responses/TransitionConflict'
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        -
+          bearerAuth: []
 components:
-  securitySchemes:
-    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
     Error:
-      type: object
-      required: [status, error, message]
+      required:
+        - status
+        - error
+        - message
       properties:
-        status: { type: integer, example: 409 }
-        error: { type: string, example: CONFLICT }
-        message: { type: string, example: Ce véhicule est déjà réservé sur ces dates }
+        status:
+          description: 'Schémas du contrat OpenAPI (components/schemas). Classe séparée : swagger-php imbriquerait sinon les schémas dans les paramètres.'
+          type: integer
+          example: 409
+        error:
+          type: string
+          example: CONFLICT
+        message:
+          type: string
+          example: 'Ce véhicule est déjà réservé sur ces dates'
         details:
           type: array
           items:
-            type: object
             properties:
-              field: { type: string }
-              message: { type: string }
-    Page:
+              field:
+                type: string
+                example: startDate
+              message:
+                type: string
+                example: 'Déjà réservé du 2026-12-10 au 2026-12-13'
+            type: object
       type: object
+    ReservationStatus:
+      type: string
+      example: CONFIRMED
+      enum:
+        - PENDING
+        - CONFIRMED
+        - ONGOING
+        - COMPLETED
+        - CANCELLED
+    InternalReservation:
+      description: 'Format de docs/internal-api.md'
+      required:
+        - id
+        - userId
+        - vehicleId
+        - pickupAgencyId
+        - returnAgencyId
+        - startDate
+        - endDate
+        - status
+        - totalPrice
+        - depositAmount
+        - currency
       properties:
-        items: { type: array, items: {} }
-        page: { type: integer, example: 0 }
-        size: { type: integer, example: 20 }
-        total: { type: integer, example: 57 }
-security:
-  - bearerAuth: []
+        id:
+          type: string
+          format: uuid
+          example: 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8
+        userId:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        vehicleId:
+          type: string
+          format: uuid
+          example: 9f03ab2d-97a5-4c08-a952-dc6e446370d1
+        pickupAgencyId:
+          type: string
+          format: uuid
+          example: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+        returnAgencyId:
+          type: string
+          format: uuid
+          example: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+        startDate:
+          type: string
+          format: date
+          example: '2026-11-20'
+        endDate:
+          type: string
+          format: date
+          example: '2026-11-25'
+        status:
+          $ref: '#/components/schemas/ReservationStatus'
+        totalPrice:
+          description: 'jours x dailyRate de la catégorie, 3 décimales'
+          type: number
+          example: 450
+        depositAmount:
+          description: 'caution de la catégorie, copiée à la création'
+          type: number
+          example: 500
+        currency:
+          type: string
+          example: TND
+      type: object
+    StatusHistoryEntry:
+      properties:
+        fromStatus:
+          oneOf:
+            -
+              $ref: '#/components/schemas/ReservationStatus'
+            -
+              type: object
+              nullable: true
+              enum:
+                - null
+          description: 'null pour la création'
+        toStatus:
+          $ref: '#/components/schemas/ReservationStatus'
+        changedAt:
+          type: string
+          format: date-time
+          example: '2026-11-08T14:30:00Z'
+        changedBy:
+          description: 'null pour un changement automatique (message RabbitMQ)'
+          type: string
+          format: uuid
+          example: null
+          nullable: true
+        comment:
+          type: string
+          example: 'Paiement RENTAL reçu'
+          nullable: true
+      type: object
+    Reservation:
+      description: "Format de l'API publique : celui de /internal plus categoryId, allowedTransitions, createdAt, updatedAt ; statusHistory dans le détail seulement."
+      allOf:
+        -
+          $ref: '#/components/schemas/InternalReservation'
+        -
+          properties:
+            categoryId:
+              type: string
+              format: uuid
+              example: 94236cd0-16fc-41e0-bfc2-c8b1d2c8b1fc
+            allowedTransitions:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReservationStatus'
+              example:
+                - ONGOING
+                - CANCELLED
+            createdAt:
+              type: string
+              format: date-time
+              example: '2026-11-08T14:00:00Z'
+            updatedAt:
+              type: string
+              format: date-time
+              example: '2026-11-08T14:30:00Z'
+            statusHistory:
+              type: array
+              items:
+                $ref: '#/components/schemas/StatusHistoryEntry'
+          type: object
+    ReservationPage:
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reservation'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 2
+      type: object
+    InternalReservationPage:
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalReservation'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 2
+      type: object
+    ActiveReservations:
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+          example: ecdcc60f-ed6a-4007-8622-2b568338ef7a
+        active:
+          type: boolean
+          example: true
+        reservationIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          example:
+            - 01cb68ad-4eec-4bdd-8971-ce35381c59d1
+      type: object
+    CreateReservation:
+      required:
+        - vehicleId
+        - startDate
+        - endDate
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+          example: 2657e174-f016-4f0c-9485-0c63141432e3
+        startDate:
+          description: "Au plus tôt aujourd'hui (heure de Tunis)"
+          type: string
+          format: date
+          example: '2026-12-01'
+        endDate:
+          description: 'Après startDate ; jours facturés = endDate - startDate'
+          type: string
+          format: date
+          example: '2026-12-04'
+        pickupAgencyId:
+          description: "Facultatif ; doit être l'agence du véhicule"
+          type: string
+          format: uuid
+          example: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+          nullable: true
+        returnAgencyId:
+          description: "Facultatif ; par défaut l'agence de départ"
+          type: string
+          format: uuid
+          example: 1deb1dea-ab54-436d-8ed7-c3322f782c88
+          nullable: true
+        userId:
+          description: 'Client concerné : obligatoire pour un AGENT ou un ADMIN ; pour un CLIENT, absent ou égal à son propre id'
+          type: string
+          format: uuid
+          example: null
+          nullable: true
+      type: object
+    UpdateReservation:
+      required:
+        - startDate
+        - endDate
+      properties:
+        startDate:
+          type: string
+          format: date
+          example: '2026-12-10'
+        endDate:
+          type: string
+          format: date
+          example: '2026-12-15'
+        returnAgencyId:
+          type: string
+          format: uuid
+          example: 1deb1dea-ab54-436d-8ed7-c3322f782c88
+          nullable: true
+      type: object
+    ChangeStatus:
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/ReservationStatus'
+        comment:
+          type: string
+          example: 'Véhicule remis au client'
+          nullable: true
+          maxLength: 1000
+      type: object
+    CancelReservation:
+      properties:
+        reason:
+          type: string
+          example: 'Changement de programme'
+          nullable: true
+          maxLength: 500
+      type: object
+    Quote:
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+          example: 2657e174-f016-4f0c-9485-0c63141432e3
+        categoryId:
+          type: string
+          format: uuid
+          example: a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c
+        categoryName:
+          type: string
+          example: SUV
+        pickupAgencyId:
+          type: string
+          format: uuid
+          example: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+        returnAgencyId:
+          type: string
+          format: uuid
+          example: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+        startDate:
+          type: string
+          format: date
+          example: '2026-12-01'
+        endDate:
+          type: string
+          format: date
+          example: '2026-12-04'
+        days:
+          type: integer
+          example: 3
+        dailyRate:
+          type: number
+          example: 160
+        totalPrice:
+          description: 'Prix facturé (prix fixe)'
+          type: number
+          example: 480
+        depositAmount:
+          type: number
+          example: 1000
+        currency:
+          type: string
+          example: TND
+        suggestedPrice:
+          description: "Prix conseillé par ml-service, null si le modèle est indisponible (le prix fixe s'applique)"
+          properties:
+            dailyPrice:
+              type: number
+              example: 152.5
+            totalPrice:
+              type: number
+              example: 457.5
+            lowerBound:
+              type: number
+              example: 140
+            upperBound:
+              type: number
+              example: 171.25
+            modelVersion:
+              type: string
+              example: v1-2026-11
+          type: object
+          nullable: true
+      type: object
+  responses:
+    BadRequest:
+      description: 'Requête invalide (champs dans details)'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 400
+            error: BAD_REQUEST
+            message: 'Requête invalide'
+            details:
+              -
+                field: endDate
+                message: 'endDate doit être après startDate (au moins un jour de location)'
+    Unauthorized:
+      description: "Token absent, invalide, mal signé, d'un autre émetteur ou expiré"
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 401
+            error: UNAUTHORIZED
+            message: 'Token absent : en-tête Authorization: Bearer <token> attendu'
+    Forbidden:
+      description: "Rôle insuffisant ou réservation d'un autre client"
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 403
+            error: FORBIDDEN
+            message: 'Cette réservation appartient à un autre client'
+    NotFound:
+      description: 'Réservation introuvable'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 404
+            error: NOT_FOUND
+            message: 'Réservation introuvable'
+    TransitionConflict:
+      description: 'Transition de statut interdite (transitions possibles dans details)'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 409
+            error: CONFLICT
+            message: 'Transition interdite : PENDING -> COMPLETED'
+            details:
+              -
+                field: status
+                message: 'Transitions possibles depuis PENDING : CONFIRMED, CANCELLED'
+    BadGateway:
+      description: 'Réponse illisible de user-service ou vehicle-service'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 502
+            error: BAD_GATEWAY
+            message: 'Réponse illisible du service RENTAL-VEHICLE (JSON invalide)'
+    ServiceUnavailable:
+      description: 'Service appelé, Eureka, Keycloak ou RabbitMQ indisponible'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 503
+            error: SERVICE_UNAVAILABLE
+            message: 'Service RENTAL-USER indisponible'
+  parameters:
+    ReservationId:
+      name: id
+      in: path
+      description: 'UUID de la réservation'
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8
+    Page:
+      name: page
+      in: query
+      description: 'Numéro de page, à partir de 0'
+      required: false
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+    Size:
+      name: size
+      in: query
+      description: 'Taille de page'
+      required: false
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+        minimum: 1
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      description: "Repris tel quel dans la réponse et transmis aux autres services (généré s'il manque)"
+      required: false
+      schema:
+        type: string
+      example: demo-42
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: 'Access token Keycloak (realm location-voitures). Utilisateur : client rental-front ; service : client credentials.'
+      bearerFormat: JWT
+      scheme: bearer
+tags:
+  -
+    name: Réservations
+    description: 'API publique, via la Gateway (rôles CLIENT, AGENT, ADMIN)'
+  -
+    name: Interne
+    description: 'Routes pour les autres microservices (token de compte de service, rôle INTERNAL), jamais exposées par la Gateway'
+  -
+    name: Santé
+    description: 'État du service'

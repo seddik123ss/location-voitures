@@ -43,10 +43,6 @@ final class ApiExceptionRenderer
             default => [500, 'INTERNAL_SERVER_ERROR', 'Erreur interne du service', []],
         };
 
-        if ($status >= 500) {
-            report($e);
-        }
-
         $body = ['status' => $status, 'error' => $error, 'message' => $message];
         if ($details !== []) {
             $body['details'] = $details;

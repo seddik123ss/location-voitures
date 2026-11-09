@@ -6,6 +6,8 @@ use App\Enums\ReservationStatus;
 use App\Events\ReservationEventPublisher;
 use App\Exceptions\ApiException;
 use App\Exceptions\InvalidStatusTransition;
+use App\Http\Json;
+use App\Integration\PricePredictor;
 use App\Integration\UserLookup;
 use App\Integration\VehicleInfo;
 use App\Integration\VehicleLookup;
@@ -28,6 +30,7 @@ final class ReservationService
         private readonly UserLookup $users,
         private readonly VehicleLookup $vehicles,
         private readonly ReservationEventPublisher $events,
+        private readonly PricePredictor $prices,
     ) {
     }
 
@@ -63,6 +66,45 @@ final class ReservationService
             ->orderByDesc('start_date')
             ->orderBy('id')
             ->paginate(perPage: $size, page: $page + 1);
+    }
+
+    /**
+     * Devis sans création (formulaire de réservation) : mêmes contrôles que create(), prix fixe facturé
+     * et prix conseillé par ml-service (null si le modèle est indisponible : le prix fixe s'applique).
+     *
+     * @return array<string, mixed>
+     */
+    public function quote(BookingRequest $request): array
+    {
+        $this->checkCustomer($request);
+        $vehicle = $this->findBookableVehicle($request->vehicleId);
+        $pickup = $this->pickupAgency($request, $vehicle);
+        $this->checkNoOverlap($request, lock: false);
+
+        $prediction = $this->prices->predict($vehicle->categoryId, $pickup, $request->startDate, $request->endDate);
+        $days = $request->days();
+
+        return [
+            'vehicleId' => $vehicle->id,
+            'categoryId' => $vehicle->categoryId,
+            'categoryName' => $vehicle->categoryName,
+            'pickupAgencyId' => $pickup,
+            'returnAgencyId' => $request->returnAgencyId ?? $pickup,
+            'startDate' => $request->startDate->toDateString(),
+            'endDate' => $request->endDate->toDateString(),
+            'days' => $days,
+            'dailyRate' => Json::amount($vehicle->dailyRate),
+            'totalPrice' => Json::amount(self::price($request, $vehicle)),
+            'depositAmount' => Json::amount($vehicle->deposit),
+            'currency' => config('reservation.currency'),
+            'suggestedPrice' => $prediction === null ? null : [
+                'dailyPrice' => Json::amount($prediction->dailyPrice),
+                'totalPrice' => Json::amount(bcmul((string) $days, $prediction->dailyPrice, 3)),
+                'lowerBound' => Json::amount($prediction->lowerBound),
+                'upperBound' => Json::amount($prediction->upperBound),
+                'modelVersion' => $prediction->modelVersion,
+            ],
+        ];
     }
 
     public function create(BookingRequest $request, Principal $by): Reservation
@@ -235,11 +277,11 @@ final class ReservationService
     }
 
     /** Règle 5 : pas de réservation PENDING, CONFIRMED ou ONGOING du même véhicule sur la période (409). */
-    private function checkNoOverlap(BookingRequest $request, ?string $exceptId = null): void
+    private function checkNoOverlap(BookingRequest $request, ?string $exceptId = null, bool $lock = true): void
     {
         $conflicts = Reservation::query()
             ->overlapping($request->vehicleId, $request->startDate->toDateString(), $request->endDate->toDateString(), $exceptId)
-            ->lockForUpdate()
+            ->when($lock, fn ($q) => $q->lockForUpdate())
             ->orderBy('start_date')
             ->get(['id', 'start_date', 'end_date']);
 

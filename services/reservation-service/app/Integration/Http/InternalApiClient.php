@@ -31,6 +31,21 @@ final class InternalApiClient
     /** @return array<string, mixed>|null */
     public function getJson(string $app, string $path): ?array
     {
+        return $this->request('GET', $app, $path);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>|null
+     */
+    public function postJson(string $app, string $path, array $body): ?array
+    {
+        return $this->request('POST', $app, $path, $body);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function request(string $method, string $app, string $path, ?array $body = null): ?array
+    {
         try {
             $url = rtrim($this->registry->resolve($app), '/').$path;
         } catch (EurekaUnavailable $e) {
@@ -38,11 +53,11 @@ final class InternalApiClient
             throw ApiException::serviceUnavailable("Service $app indisponible", $e);
         }
 
-        $response = $this->send($app, $url);
+        $response = $this->send($method, $app, $url, $body);
         if (in_array($response->status(), [401, 403], true)) {
             // Token expiré ou révoqué côté Keycloak : un nouvel essai avec un token neuf.
             $this->tokens->invalidate();
-            $response = $this->send($app, $url);
+            $response = $this->send($method, $app, $url, $body);
         }
 
         $status = $response->status();
@@ -53,10 +68,10 @@ final class InternalApiClient
             throw ApiException::serviceUnavailable("Service $app indisponible (HTTP $status)");
         }
         if (in_array($status, [401, 403], true)) {
-            Log::error("$app a refusé le token de service (HTTP $status) pour GET $path");
+            Log::error("$app a refusé le token de service (HTTP $status) pour $method $path");
             throw ApiException::badGateway("Le service $app a refusé le token de service (HTTP $status)");
         }
-        if ($status !== 200) {
+        if ($status !== 200 && $status !== 201) {
             throw ApiException::badGateway("Réponse inattendue du service $app (HTTP $status)");
         }
 
@@ -72,7 +87,7 @@ final class InternalApiClient
         return $data;
     }
 
-    private function send(string $app, string $url): Response
+    private function send(string $method, string $app, string $url, ?array $body): Response
     {
         try {
             return Http::acceptJson()
@@ -80,7 +95,7 @@ final class InternalApiClient
                 ->withHeaders([CorrelationId::HEADER => CorrelationId::current()])
                 ->connectTimeout((int) config('reservation.http_connect_timeout'))
                 ->timeout((int) config('reservation.http_timeout'))
-                ->get($url);
+                ->send($method, $url, $body === null ? [] : ['json' => $body]);
         } catch (ConnectionException $e) {
             // Détail réseau (adresse, message du système) dans le log seulement.
             Log::warning("Service $app injoignable ($url) : ".$e->getMessage());

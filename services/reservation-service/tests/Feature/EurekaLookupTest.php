@@ -239,4 +239,50 @@ class EurekaLookupTest extends TestCase
 
         $this->assertError($this->book(self::client()), 503, 'SERVICE_UNAVAILABLE', 'refusé par Keycloak');
     }
+
+    // ---------------------------------------------------------------- prix conseillé (RENTAL-ML)
+
+    private const ML = 'http://host.docker.internal:8107';
+
+    private function quote(): \Illuminate\Testing\TestResponse
+    {
+        return $this->api('POST', '/api/reservations/quote', self::client(), [
+            'vehicleId' => DemoIds::V4, 'startDate' => '2026-12-01', 'endDate' => '2026-12-04',
+        ]);
+    }
+
+    public function test_prix_conseille_par_le_ml(): void
+    {
+        $this->registry->instances['RENTAL-ML'] = self::ML;
+        $this->fakeServices([self::ML.'/internal/ml/price-predictions' => Http::response(
+            ['dailyPrice' => 152.5, 'lowerBound' => 140.0, 'upperBound' => 171.25, 'modelVersion' => 'v1-2026-11'],
+        )]);
+
+        $response = $this->quote()->assertOk()
+            ->assertJsonPath('totalPrice', 480.0) // le prix facturé reste le prix fixe
+            ->assertJsonPath('suggestedPrice.modelVersion', 'v1-2026-11');
+        $this->assertStringContainsString(
+            '"suggestedPrice":{"dailyPrice":152.500,"totalPrice":457.500,"lowerBound":140.000,"upperBound":171.250,"modelVersion":"v1-2026-11"}',
+            $response->getContent(),
+        );
+        Http::assertSent(fn (Request $r) => $r->url() === self::ML.'/internal/ml/price-predictions'
+            && $r->method() === 'POST'
+            && $r->data() === ['categoryId' => DemoIds::CAT_SUV, 'agencyId' => DemoIds::AG_TUNIS, 'startDate' => '2026-12-01', 'endDate' => '2026-12-04']
+            && $r->hasHeader('Authorization', 'Bearer jeton-de-service'));
+    }
+
+    public function test_ml_indisponible_repli_sur_le_prix_fixe(): void
+    {
+        // Absent d'Eureka.
+        $this->fakeServices();
+        $this->quote()->assertOk()->assertJsonPath('suggestedPrice', null)->assertJsonPath('totalPrice', 480.0);
+
+        // Présent mais en erreur, ou réponse illisible.
+        $this->registry->instances['RENTAL-ML'] = self::ML;
+        foreach ([Http::response('', 500), Http::response(['dailyPrice' => 'cher'], 200), fn () => throw new ConnectionException('refusé')] as $mlResponse) {
+            Http::swap(new \Illuminate\Http\Client\Factory());
+            $this->fakeServices([self::ML.'/*' => $mlResponse]);
+            $this->quote()->assertOk()->assertJsonPath('suggestedPrice', null);
+        }
+    }
 }

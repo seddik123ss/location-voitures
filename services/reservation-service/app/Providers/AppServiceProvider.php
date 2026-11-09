@@ -8,6 +8,9 @@ use App\Events\AmqpReservationEventPublisher;
 use App\Events\ReservationEventPublisher;
 use App\Integration\Demo\DemoUserLookup;
 use App\Integration\Demo\DemoVehicleLookup;
+use App\Integration\Demo\NoPricePredictor;
+use App\Integration\Http\HttpPricePredictor;
+use App\Integration\PricePredictor;
 use App\Integration\Http\HttpUserLookup;
 use App\Integration\Http\HttpVehicleLookup;
 use App\Integration\Http\KeycloakServiceTokenProvider;
@@ -35,6 +38,7 @@ class AppServiceProvider extends ServiceProvider
         // LOOKUP_MODE=demo (données de docs/demo-ids.md) ou eureka (vrais appels).
         $this->app->bind(UserLookup::class, fn ($app) => $app->make(self::lookupMode() === 'demo' ? DemoUserLookup::class : HttpUserLookup::class));
         $this->app->bind(VehicleLookup::class, fn ($app) => $app->make(self::lookupMode() === 'demo' ? DemoVehicleLookup::class : HttpVehicleLookup::class));
+        $this->app->bind(PricePredictor::class, fn ($app) => $app->make(self::lookupMode() === 'demo' ? NoPricePredictor::class : HttpPricePredictor::class));
     }
 
     public function boot(): void
