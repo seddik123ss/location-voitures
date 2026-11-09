@@ -44,12 +44,30 @@ def load_feature_table(csv_path: Path = DATASET_PATH) -> pd.DataFrame:
     return features_from_history(raw_reservations)
 
 
-def split_train_test(feature_table: pd.DataFrame, test_share: float = 0.2):
-    """Sépare en jeu d'entraînement et jeu de test.
-    Retourne (train_features, test_features, train_prices, test_prices)."""
-    return train_test_split(
-        feature_table[FEATURE_COLUMNS], feature_table[TARGET_COLUMN],
-        test_size=test_share, random_state=RANDOM_SEED)
+def split_train_validation_test(feature_table: pd.DataFrame,
+                                validation_share: float = 0.2, test_share: float = 0.2) -> dict:
+    """Sépare en 3 jeux (par défaut 60 % / 20 % / 20 %) :
+    - train      : pour entraîner les modèles ;
+    - validation : pour choisir le modèle et calculer les ratios de l'intervalle ;
+    - test       : mis de côté jusqu'à la mesure finale (MAE, R², couverture).
+    Retourne {"train": (features, prices), "validation": (...), "test": (...)}."""
+    all_features = feature_table[FEATURE_COLUMNS]
+    all_prices = feature_table[TARGET_COLUMN]
+
+    # 1) on retire d'abord le test (20 % du total)
+    remaining_features, test_features, remaining_prices, test_prices = train_test_split(
+        all_features, all_prices, test_size=test_share, random_state=RANDOM_SEED)
+    # 2) puis on coupe le reste en train / validation (20 % du total = 25 % du reste)
+    validation_share_of_remaining = validation_share / (1 - test_share)
+    train_features, validation_features, train_prices, validation_prices = train_test_split(
+        remaining_features, remaining_prices, test_size=validation_share_of_remaining,
+        random_state=RANDOM_SEED)
+
+    return {
+        "train": (train_features, train_prices),
+        "validation": (validation_features, validation_prices),
+        "test": (test_features, test_prices),
+    }
 
 
 def build_preprocessor() -> ColumnTransformer:
@@ -76,23 +94,26 @@ def train_model(model_name: str, train_features: pd.DataFrame, train_prices: pd.
     return pipeline
 
 
-def evaluate_model(pipeline: Pipeline, test_features: pd.DataFrame, test_prices: pd.Series) -> dict:
-    """MAE = erreur moyenne en TND ; R² = part de la variation des prix expliquée (1 = parfait)."""
-    predicted_prices = pipeline.predict(test_features)
+def evaluate_model(pipeline: Pipeline, features: pd.DataFrame, actual_prices: pd.Series) -> dict:
+    """MAE = erreur moyenne en TND ; R² = part de la variation des prix expliquée (1 = parfait).
+    Utilisé sur la validation (pour choisir) puis sur le test (mesure finale)."""
+    predicted_prices = pipeline.predict(features)
     return {
-        "mae": round(float(mean_absolute_error(test_prices, predicted_prices)), 3),
-        "r2": round(float(r2_score(test_prices, predicted_prices)), 4),
+        "mae": round(float(mean_absolute_error(actual_prices, predicted_prices)), 3),
+        "r2": round(float(r2_score(actual_prices, predicted_prices)), 4),
     }
 
 
-def compute_interval_ratios(pipeline: Pipeline, test_features: pd.DataFrame, test_prices: pd.Series,
+def compute_interval_ratios(pipeline: Pipeline, validation_features: pd.DataFrame,
+                            validation_prices: pd.Series,
                             lower_quantile: float = 0.05, upper_quantile: float = 0.95) -> dict:
-    """Intervalle de prix à partir des erreurs RELATIVES sur le test.
+    """Intervalle de prix à partir des erreurs RELATIVES sur le jeu de VALIDATION.
 
     ratio = prix réel / prix prédit. Avec les quantiles 5 % et 95 % de ce ratio,
-    l'intervalle [prédit x ratio_bas ; prédit x ratio_haut] contient ~90 % des prix réels.
+    l'intervalle [prédit x ratio_bas ; prédit x ratio_haut] devrait contenir ~90 % des prix réels
+    (à vérifier ensuite sur le test, avec measure_interval_coverage).
     """
-    price_ratios = np.asarray(test_prices) / pipeline.predict(test_features)
+    price_ratios = np.asarray(validation_prices) / pipeline.predict(validation_features)
     return {
         "lower_ratio": round(float(np.quantile(price_ratios, lower_quantile)), 4),
         "upper_ratio": round(float(np.quantile(price_ratios, upper_quantile)), 4),

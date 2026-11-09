@@ -13,3 +13,8 @@ htmlcov/
 
 # Points de sauvegarde automatiques de Jupyter
 .ipynb_checkpoints/
+
+# Modèles entraînés : seule la version 1 (modèle de démonstration) est commitée,
+# les versions créées par POST /api/ml/trainings restent locales
+artifacts/price_model_v*.joblib
+!artifacts/price_model_v1.joblib
