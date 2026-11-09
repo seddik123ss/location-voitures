@@ -51,30 +51,38 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient<ServiceTokenProvider>();
 builder.Services.AddTransient<ServiceTokenHandler>();
 
-// Autres services : appels via Eureka, ou simulation (RemoteServices:UseFakes / USE_FAKE_SERVICES=true)
+// Autres services : chacun est appelé pour de vrai via Eureka, ou simulé (données de docs/demo-ids.md).
+// USE_FAKE_SERVICES (ou RemoteServices:UseFakes) : true = tous simulés, false ou vide = aucun,
+// ou une liste, par exemple "reservation,vehicle" = ces deux-là simulés, payment appelé pour de vrai.
 var remote = builder.Configuration.GetSection("RemoteServices");
-if (remote.GetValue<bool>("UseFakes") || isTesting)
-{
-    builder.Services.AddSingleton<IReservationClient, FakeReservationClient>();
-    builder.Services.AddSingleton<IPaymentClient, FakePaymentClient>();
-    builder.Services.AddSingleton<IVehicleClient, FakeVehicleClient>();
-}
-else
-{
-    var timeout = TimeSpan.FromSeconds(remote.GetValue("TimeoutSeconds", 5));
-    void Remote<TClient, TImpl>(string serviceName) where TClient : class where TImpl : class, TClient =>
-        builder.Services.AddHttpClient<TClient, TImpl>(c =>
-            {
-                c.BaseAddress = new Uri($"http://{serviceName}");
-                c.Timeout = timeout;
-            })
-            .AddServiceDiscovery()
-            .AddHttpMessageHandler<ServiceTokenHandler>();
+var fakes = isTesting
+    ? FakeSelection.All
+    : FakeSelection.Parse(remote["UseFakes"]);
+var timeout = TimeSpan.FromSeconds(remote.GetValue("TimeoutSeconds", 5));
 
+void Remote<TClient, TImpl>(string serviceName) where TClient : class where TImpl : class, TClient =>
+    builder.Services.AddHttpClient<TClient, TImpl>(c =>
+        {
+            c.BaseAddress = new Uri($"http://{serviceName}");
+            c.Timeout = timeout;
+        })
+        .AddServiceDiscovery()
+        .AddHttpMessageHandler<ServiceTokenHandler>();
+
+if (fakes.Contains("reservation"))
+    builder.Services.AddSingleton<IReservationClient, FakeReservationClient>();
+else
     Remote<IReservationClient, HttpReservationClient>(remote["ReservationService"] ?? "RENTAL-RESERVATION");
+
+if (fakes.Contains("payment"))
+    builder.Services.AddSingleton<IPaymentClient, FakePaymentClient>();
+else
     Remote<IPaymentClient, HttpPaymentClient>(remote["PaymentService"] ?? "RENTAL-PAYMENT");
+
+if (fakes.Contains("vehicle"))
+    builder.Services.AddSingleton<IVehicleClient, FakeVehicleClient>();
+else
     Remote<IVehicleClient, HttpVehicleClient>(remote["VehicleService"] ?? "RENTAL-VEHICLE");
-}
 
 // RabbitMQ : contract-service publie seulement
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMq"));
@@ -137,6 +145,9 @@ builder.Services.AddSwaggerGen(o =>
 });
 
 var app = builder.Build();
+
+app.Logger.LogInformation("Services simulés : {Fakes}",
+    fakes.Count == 0 ? "aucun (appels réels via Eureka)" : string.Join(", ", fakes));
 
 // Applique les migrations au démarrage (crée les tables et les données de démo)
 if (!isTesting)

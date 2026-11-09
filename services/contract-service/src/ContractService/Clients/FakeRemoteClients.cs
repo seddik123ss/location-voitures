@@ -37,13 +37,13 @@ public static class FakeData
         new(ReservationCompleted, Client2, Vehicles[2].Id, new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 5), "COMPLETED", 640.000m, 1000.000m),
     };
 
-    // Hypothèse à confirmer avec Fadi : la caution est un paiement de type DEPOSIT au statut SUCCEEDED.
+    // Comme payment-service (Fadi) : la caution est un paiement DEPOSIT au statut SUCCEEDED (p-confirmed-deposit, p-completed-deposit).
     public static readonly IReadOnlyList<PaymentInfo> Payments = new List<PaymentInfo>
     {
         new(Guid.Parse("d76b538e-e367-4bb3-966b-98a4d9dc93a5"), ReservationConfirmed, Client1, 450.000m, "TND", "RENTAL", "SUCCEEDED"),
-        new(Guid.Parse("5f2c7a1e-3b8d-4c6f-a9e2-1d0b4c7e8f31"), ReservationConfirmed, Client1, 500.000m, "TND", "DEPOSIT", "SUCCEEDED"),
+        new(Guid.Parse("527d092e-2fc3-409c-bb3b-525e074ceb93"), ReservationConfirmed, Client1, 500.000m, "TND", "DEPOSIT", "SUCCEEDED"),
         new(Guid.Parse("918e07dc-4995-4985-8373-aad04e13636f"), ReservationCompleted, Client2, 640.000m, "TND", "RENTAL", "SUCCEEDED"),
-        new(Guid.Parse("6a3d8b2f-4c9e-4d7a-b0f3-2e1c5d8f9a42"), ReservationCompleted, Client2, 1000.000m, "TND", "DEPOSIT", "SUCCEEDED"),
+        new(Guid.Parse("7ddc173a-865a-4a6b-981d-09f3ec2b6958"), ReservationCompleted, Client2, 1000.000m, "TND", "DEPOSIT", "SUCCEEDED"),
     };
 }
 

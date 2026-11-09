@@ -84,8 +84,16 @@ Toutes les erreurs suivent le format commun : `{ "status", "error", "message", "
 | RENTAL-PAYMENT | `GET /internal/payments?reservationId=` | caution payée ? |
 | RENTAL-VEHICLE | `GET /internal/vehicles/{id}` | tarif journalier (frais de retard) |
 
-Tant que ces services ne tournent pas, `USE_FAKE_SERVICES=true` les simule avec les données de `docs/demo-ids.md`
-(`src/ContractService/Clients/FakeRemoteClients.cs`).
+Tant que ces services ne tournent pas, `USE_FAKE_SERVICES` les simule avec les données de `docs/demo-ids.md`
+(`src/ContractService/Clients/FakeRemoteClients.cs`), service par service :
+
+| Valeur | Effet |
+| --- | --- |
+| `true` | réservation, paiement et véhicule simulés |
+| `false` (ou vide) | les trois appelés pour de vrai via Eureka |
+| `reservation,vehicle` | ces deux-là simulés, paiement appelé pour de vrai (exemple : test avec payment-service) |
+
+Au démarrage, le journal affiche la liste des services simulés (`Services simulés : ...`).
 
 **RabbitMQ** (contract-service est seulement producteur ; exchange par défaut, routing key = nom de la file, messages persistants JSON) :
 
@@ -140,7 +148,7 @@ Données pour essayer : réservation `33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8` (r-c
 | `KEYCLOAK_ISSUER` | `http://localhost:8180/realms/location-voitures` | émetteur des tokens |
 | `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | `contract-service` / — | token de service pour les appels `/internal` |
 | `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672` | broker |
-| `USE_FAKE_SERVICES` | `false` | `true` = simuler réservation, paiement et véhicule |
+| `USE_FAKE_SERVICES` | `false` | services simulés : `true` (tous), `false` (aucun) ou une liste parmi `reservation`, `payment`, `vehicle` |
 
 ## Tests
 
