@@ -7,7 +7,7 @@ from datetime import date
 
 import pandas as pd
 
-from app.catalog import AGENCIES, CATEGORIES
+from app.rental_catalog import AGENCIES, CATEGORIES
 
 # Durée maximale d'une location acceptée par le service (en jours)
 MAX_DURATION_DAYS = 30
@@ -57,23 +57,25 @@ def build_features(
     }
 
 
-def features_from_history(raw: pd.DataFrame) -> pd.DataFrame:
+def features_from_history(raw_reservations: pd.DataFrame) -> pd.DataFrame:
     """Transforme l'historique brut (format ReservationCompleted + occupancyRate + dailyPrice)
     en tableau de variables + colonne cible daily_price. Même calcul que build_features."""
-    start = pd.to_datetime(raw["startDate"])
-    end = pd.to_datetime(raw["endDate"])
+    start_dates = pd.to_datetime(raw_reservations["startDate"])
+    end_dates = pd.to_datetime(raw_reservations["endDate"])
     # bookedAt est un instant UTC : on garde seulement la date
-    booked_on = pd.to_datetime(raw["bookedAt"], utc=True).dt.tz_localize(None).dt.normalize()
+    booked_dates = (
+        pd.to_datetime(raw_reservations["bookedAt"], utc=True).dt.tz_localize(None).dt.normalize()
+    )
 
     features = pd.DataFrame({
-        "category": raw["categoryId"].map(lambda i: CATEGORIES[i]["code"]),
-        "agency": raw["agencyId"].map(lambda i: AGENCIES[i]["code"]),
-        "season": start.dt.month.map(SEASON_BY_MONTH),
-        "start_weekday": start.dt.weekday,
-        "duration_days": (end - start).dt.days,
-        "lead_time_days": (start - booked_on).dt.days,
-        "occupancy_rate": raw["occupancyRate"].astype(float),
+        "category": raw_reservations["categoryId"].map(lambda category_id: CATEGORIES[category_id]["code"]),
+        "agency": raw_reservations["agencyId"].map(lambda agency_id: AGENCIES[agency_id]["code"]),
+        "season": start_dates.dt.month.map(SEASON_BY_MONTH),
+        "start_weekday": start_dates.dt.weekday,
+        "duration_days": (end_dates - start_dates).dt.days,
+        "lead_time_days": (start_dates - booked_dates).dt.days,
+        "occupancy_rate": raw_reservations["occupancyRate"].astype(float),
     })
-    if "dailyPrice" in raw.columns:
-        features[TARGET_COLUMN] = raw["dailyPrice"].astype(float)
+    if "dailyPrice" in raw_reservations.columns:
+        features[TARGET_COLUMN] = raw_reservations["dailyPrice"].astype(float)
     return features

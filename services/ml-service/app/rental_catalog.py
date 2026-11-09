@@ -16,3 +16,7 @@ AGENCIES: dict[str, dict] = {
     "eb825ac4-855b-499b-b37a-b4c37bbd6b4e": {"code": "TUNIS", "name": "Agence Tunis"},
     "1deb1dea-ab54-436d-8ed7-c3322f782c88": {"code": "SOUSSE", "name": "Agence Sousse"},
 }
+
+# Correspondances inverses : code lisible -> UUID (ex. "SUV" -> "a6ec349d-...")
+CATEGORY_ID_BY_CODE: dict[str, str] = {info["code"]: category_id for category_id, info in CATEGORIES.items()}
+AGENCY_ID_BY_CODE: dict[str, str] = {info["code"]: agency_id for agency_id, info in AGENCIES.items()}

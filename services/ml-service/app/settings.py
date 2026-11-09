@@ -1,17 +1,17 @@
 """Configuration du service, lue depuis les variables d'environnement ou le fichier .env.
 
-Ailleurs dans le code, on écrit simplement : from app.config import settings
+Ailleurs dans le code, on écrit simplement : from app.settings import settings
 """
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Dossier racine du service (services/ml-service), quel que soit le dossier de lancement
-BASE_DIR = Path(__file__).resolve().parent.parent
+SERVICE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=BASE_DIR / ".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=SERVICE_DIR / ".env", extra="ignore")
 
     service_port: int = 8107
     service_host: str = "host.docker.internal"
