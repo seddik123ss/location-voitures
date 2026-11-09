@@ -14,7 +14,10 @@ from payments.clients.reservations import FakeReservationClient
 from payments.demo_data import (
     CLIENT1,
     P_COMPLETED,
+    P_COMPLETED_FEE_FUEL,
+    P_COMPLETED_FEE_LATE,
     P_CONFIRMED,
+    P_CONFIRMED_DEPOSIT,
     R_COMPLETED,
     R_CONFIRMED,
     R_PENDING,
@@ -226,13 +229,7 @@ class DeleteTests(ApiTestCase):
 class PayPendingFeeTests(ApiTestCase):
     def setUp(self):
         super().setUp()
-        from payments.services import handle_return_settled
-        handle_return_settled(uuid.uuid4(), {
-            "reservationId": str(R_COMPLETED), "userId": "611f32de-ce7b-4927-b1c4-d113b6479d59",
-            "contractId": str(uuid.uuid4()), "extraFees": [{"type": "FUEL", "amount": 35.0}],
-            "depositToRelease": 0,
-        })
-        self.fee = Payment.objects.get(reservation_id=R_COMPLETED, type="EXTRA_FEE")
+        self.fee = Payment.objects.get(pk=P_COMPLETED_FEE_FUEL)  # seeded: FUEL 35.000 PENDING, client2
 
     def pay_fee(self, headers, **body):
         return self.client.post(f"/api/payments/{self.fee.id}/pay", body, content_type="application/json",
@@ -261,12 +258,15 @@ class ReadTests(ApiTestCase):
     def test_client_sees_only_own_payments_paginated(self):
         body = self.client.get("/api/payments", headers=client1(idempotency_key=False)).json()
         self.assertEqual(set(body), {"items", "page", "size", "total"})
-        self.assertEqual([p["id"] for p in body["items"]], [str(P_CONFIRMED)])
+        self.assertEqual({p["id"] for p in body["items"]}, {str(P_CONFIRMED), str(P_CONFIRMED_DEPOSIT)})
         all_ = self.client.get("/api/payments", {"size": 1}, headers=agent(idempotency_key=False)).json()
-        self.assertEqual((all_["total"], len(all_["items"])), (2, 1))
+        self.assertEqual((all_["total"], len(all_["items"])), (7, 1))
 
     def test_filters_and_invalid_query(self):
-        body = self.client.get("/api/payments", {"reservationId": str(R_COMPLETED)},
+        completed = self.client.get("/api/payments", {"reservationId": str(R_COMPLETED)},
+                                    headers=admin(idempotency_key=False)).json()
+        self.assertEqual(completed["total"], 5)
+        body = self.client.get("/api/payments", {"reservationId": str(R_COMPLETED), "type": "RENTAL"},
                                headers=admin(idempotency_key=False)).json()
         self.assertEqual([p["id"] for p in body["items"]], [str(P_COMPLETED)])
         bad = self.client.get("/api/payments", {"status": "PAID"}, headers=admin(idempotency_key=False))
@@ -280,8 +280,12 @@ class ReadTests(ApiTestCase):
 
     def test_invoices(self):
         body = self.client.get("/api/invoices", headers=client2(idempotency_key=False)).json()
-        self.assertEqual(body["total"], 1)
-        invoice = body["items"][0]
+        self.assertEqual(body["total"], 2)  # rental + return fees
+        fees, rental = body["items"]  # most recent first
+        self.assertEqual(fees["total"], 195.0)
+        self.assertEqual({line["paymentId"] for line in fees["lines"]},
+                         {str(P_COMPLETED_FEE_LATE), str(P_COMPLETED_FEE_FUEL)})
+        invoice = rental
         self.assertEqual(invoice["lines"][0]["paymentId"], str(P_COMPLETED))
         self.assertEqual(self.client.get(f"/api/invoices/{invoice['id']}", headers=client1(idempotency_key=False)).status_code, 403)
         self.assertEqual(self.client.post("/api/invoices", {}, headers=admin(idempotency_key=False)).status_code, 405)
@@ -291,12 +295,17 @@ class InternalApiTests(ApiTestCase):
     def test_contract_of_internal_payments(self):
         response = self.client.get("/internal/payments", {"reservationId": str(R_CONFIRMED)}, headers=INTERNAL)
         self.assertEqual(response.status_code, 200)
-        [payment] = response.json()  # plain list, not paginated (docs/internal-api.md)
-        self.assertEqual(set(payment), {"id", "reservationId", "userId", "amount", "currency", "method",
-                                        "type", "status", "createdAt"})
+        payments = response.json()  # plain list, not paginated (docs/internal-api.md)
+        for payment in payments:
+            self.assertEqual(set(payment), {"id", "reservationId", "userId", "amount", "currency", "method",
+                                            "type", "status", "createdAt"})
+        # What contract-service reads (Rania): RENTAL + DEPOSIT, text enums, numeric amounts.
+        self.assertEqual({(p["type"], p["status"], p["amount"]) for p in payments},
+                         {("RENTAL", "SUCCEEDED", 450.0), ("DEPOSIT", "SUCCEEDED", 500.0)})
         deposit = self.client.get("/internal/payments", {"reservationId": str(R_CONFIRMED), "type": "DEPOSIT",
-                                                         "status": "SUCCEEDED"}, headers=INTERNAL)
-        self.assertEqual(deposit.json(), [])
+                                                         "status": "SUCCEEDED"}, headers=INTERNAL).json()
+        self.assertEqual([p["id"] for p in deposit], [str(P_CONFIRMED_DEPOSIT)])
+        self.assertGreaterEqual(sum(p["amount"] for p in deposit), 500.0)  # contract-service's handover rule
 
     def test_internal_access_rules(self):
         self.assertEqual(self.client.get("/internal/payments", headers=INTERNAL).status_code, 400)

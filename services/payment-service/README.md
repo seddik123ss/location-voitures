@@ -70,7 +70,7 @@ l'instance est visible sur http://127.0.0.1:8761.
 python manage.py test payments
 ```
 
-89 tests, sur une vraie base PostgreSQL temporaire (`test_payment_db`, créée puis détruite par Django ;
+91 tests, sur une vraie base PostgreSQL temporaire (`test_payment_db`, créée puis détruite par Django ;
 `payment_svc` doit avoir le droit `CREATEDB`, voir « Dépannage »). Couverture : règles métier et codes HTTP,
 idempotence, rollback quand RabbitMQ est indisponible, concurrence (deux paiements simultanés),
 traduction des erreurs inter-services, traitement des messages officiels de `docs/events/`, validation des
@@ -250,10 +250,22 @@ Erreurs `{status, error, message, details[{field, message}]}` pour **toutes** le
 
 `python manage.py seed_demo` (idempotent ; `--reset` efface **toutes** les données du service) :
 
-| Paiement | Réservation | Client | Type | Montant | Statut |
+| Paiement | UUID | Réservation | Type | Montant | Statut |
 | --- | --- | --- | --- | --- | --- |
-| p-confirmed `d76b538e-…` | r-confirmed | client1 | RENTAL | 450.000 | SUCCEEDED (+ facture) |
-| p-completed `918e07dc-…` | r-completed | client2 | RENTAL | 640.000 | SUCCEEDED (+ facture) |
+| p-confirmed | `d76b538e-e367-4bb3-966b-98a4d9dc93a5` | r-confirmed (client1) | RENTAL | 450.000 | SUCCEEDED (+ facture) |
+| p-confirmed-deposit | `527d092e-2fc3-409c-bb3b-525e074ceb93` | r-confirmed (client1) | DEPOSIT | 500.000 | SUCCEEDED |
+| p-completed | `918e07dc-4995-4985-8373-aad04e13636f` | r-completed (client2) | RENTAL | 640.000 | SUCCEEDED (+ facture) |
+| p-completed-deposit | `a8a08a06-d754-4c24-804c-bd9b054c203a` | r-completed (client2) | DEPOSIT | 1000.000 | REFUNDED |
+| p-completed-refund | `18e87b10-0077-4935-ae0f-c82d51bea6cf` | r-completed (client2) | REFUND | 1000.000 | SUCCEEDED (rembourse p-completed-deposit) |
+| p-completed-late | `41a7146a-e36c-4c7c-a69c-08a2f6a0ef02` | r-completed (client2) | EXTRA_FEE (LATE) | 160.000 | PENDING |
+| p-completed-fuel | `7bd41b82-0e8d-4534-9628-95ee26382a3f` | r-completed (client2) | EXTRA_FEE (FUEL) | 35.000 | PENDING |
+
+- **r-confirmed** : location et caution payées → contract-service peut remettre les clés
+  (somme des DEPOSIT SUCCEEDED ≥ `depositAmount`).
+- **r-completed** : état après `docs/events/ReturnSettled.json` (contrat c-completed clôturé) : caution rendue,
+  deux frais à payer par client2, facture des frais (195.000). L'`eventId` de cet exemple est enregistré comme déjà
+  traité : le republier est ignoré (doublon) au lieu de facturer deux fois.
+- Factures : `INV-2026-000001` (location r-completed), `000002` (frais r-completed), `000003` (location r-confirmed).
 
 Exemple : client1 paie la location de r-pending (270.000 TND), avec le token `$t` obtenu ci-dessus.
 
@@ -265,7 +277,27 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8104/api/payments -Headers $h -C
 
 ---
 
-## 6. Dépannage
+## 6. Interface Angular (`frontend/src/app/features/payments/`)
+
+Lancement : `cd frontend`, `npm install` (une fois), `npm start`, puis http://localhost:4200 → **Paiements**
+(connexion Keycloak `client1` / `client1_pwd`, `agent1`, `admin1`). Les appels passent par le proxy de
+développement puis la Gateway (`/api/...` uniquement) ; le token est ajouté par l'intercepteur commun.
+
+| Page | Route | Rôles | Contenu |
+| --- | --- | --- | --- |
+| Historique | `/payments` | CLIENT (les siens), AGENT/ADMIN (tous) | filtres, pagination ; « Régler » sur un paiement en attente ; ADMIN : valider/rejeter un virement, supprimer |
+| Payer une réservation | `/payments/new` | CLIENT, AGENT, ADMIN | location ou caution ; carte simulée (`fail_…` = refus), espèces (agent), virement ; préremplissage `?reservationId=&type=&amount=` |
+| Régler un paiement | `/payments/:id/pay` | propriétaire, AGENT, ADMIN | frais de retour, virement en attente |
+| Factures | `/payments/invoices`, `/payments/invoices/:id` | CLIENT (les siennes), AGENT/ADMIN | détail des lignes, impression / PDF |
+
+**Idempotency-Key côté interface** (`idempotent-submit.ts`) : une clé par intention de paiement ; elle est
+**conservée** si l'utilisateur réessaie après une erreur incertaine (réseau, 502, 503, 504) — si la première tentative
+était arrivée, le serveur répond 409 au lieu de débiter deux fois — et **renouvelée** après une réponse définitive
+(succès ou 4xx) ou si l'utilisateur modifie le paiement.
+
+Tests : `npx ng test --watch=false` (service HTTP et cycle de vie de la clé d'idempotence).
+
+## 7. Dépannage
 
 - **`role "payment_svc" does not exist`** : un PostgreSQL installé sur Windows occupe déjà le port 5432.
   PowerShell administrateur : `Stop-Service postgresql-x64-18` (et `Set-Service postgresql-x64-18 -StartupType Manual`).
@@ -285,7 +317,7 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8104/api/payments -Headers $h -C
 
 ---
 
-## 7. Usage de l'IA
+## 8. Usage de l'IA
 
 Un assistant de programmation IA a été utilisé dans VS Code, sous ma direction, par petites étapes validées une à une.
 
@@ -294,6 +326,8 @@ Un assistant de programmation IA a été utilisé dans VS Code, sous ma directio
 - modèles, contraintes et migrations ; numérotation des factures ;
 - couche métier `services.py`, sérialiseurs, vues, documentation Swagger ;
 - format d'erreur commun, pagination, `X-Correlation-Id`, client reservation-service simulé/HTTP ;
+- intégration Eureka, authentification JWT Keycloak, token de service, producteur et consommateur RabbitMQ ;
+- pages Angular du module Paiements ;
 - tests automatisés et ce README ;
 - diagnostic de l'environnement (conflit de port avec un PostgreSQL local).
 

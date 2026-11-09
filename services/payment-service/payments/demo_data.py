@@ -47,6 +47,17 @@ TEST_RESERVATIONS = {
     ),
 }
 
-# --- Payments (this service) ---------------------------------------------------
-P_CONFIRMED = uuid.UUID("d76b538e-e367-4bb3-966b-98a4d9dc93a5")  # r-confirmed, RENTAL 450.000, SUCCEEDED
-P_COMPLETED = uuid.UUID("918e07dc-4995-4985-8373-aad04e13636f")  # r-completed, RENTAL 640.000, SUCCEEDED
+# --- Payments (this service, docs/demo-ids.md) ----------------------------------
+# r-confirmed: rental and deposit paid -> contract-service can hand over the keys.
+P_CONFIRMED = uuid.UUID("d76b538e-e367-4bb3-966b-98a4d9dc93a5")          # RENTAL 450.000 SUCCEEDED
+P_CONFIRMED_DEPOSIT = uuid.UUID("527d092e-2fc3-409c-bb3b-525e074ceb93")  # DEPOSIT 500.000 SUCCEEDED
+# r-completed: state after docs/events/ReturnSettled.json (contract c-completed closed).
+P_COMPLETED = uuid.UUID("918e07dc-4995-4985-8373-aad04e13636f")          # RENTAL 640.000 SUCCEEDED
+P_COMPLETED_DEPOSIT = uuid.UUID("a8a08a06-d754-4c24-804c-bd9b054c203a")  # DEPOSIT 1000.000 REFUNDED
+P_COMPLETED_DEPOSIT_REFUND = uuid.UUID("18e87b10-0077-4935-ae0f-c82d51bea6cf")  # REFUND 1000.000 SUCCEEDED
+P_COMPLETED_FEE_LATE = uuid.UUID("41a7146a-e36c-4c7c-a69c-08a2f6a0ef02")  # EXTRA_FEE LATE 160.000 PENDING
+P_COMPLETED_FEE_FUEL = uuid.UUID("7bd41b82-0e8d-4534-9628-95ee26382a3f")  # EXTRA_FEE FUEL 35.000 PENDING
+
+# eventId of docs/events/ReturnSettled.json: recorded as already processed by seed_demo,
+# so replaying the example is ignored (duplicate) instead of billing the fees twice.
+RETURN_SETTLED_EXAMPLE_EVENT = uuid.UUID("dbf0d035-f15a-4a96-be2b-035f8b74438f")

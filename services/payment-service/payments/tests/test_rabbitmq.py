@@ -3,6 +3,7 @@ RabbitMQ producer/consumer logic, without a broker: pika is mocked, the consumer
 with the official messages of docs/events/ and a fake channel records ack/nack.
 """
 import json
+import uuid
 from dataclasses import replace
 from io import StringIO
 from types import SimpleNamespace
@@ -13,6 +14,7 @@ from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from pika import exceptions as pika_exc
 
+from payments.demo_data import R_CONFIRMED
 from payments.events import EventPublishError, build_event
 from payments.management.commands.consume_events import SUBSCRIPTIONS
 from payments.models import Payment
@@ -42,22 +44,31 @@ class ConsumerTests(TestCase):
         return self.consumer.handle_delivery(self.channel, delivery(queue, redelivered),
                                              SimpleNamespace(headers={"X-Correlation-Id": "c-1"}), raw)
 
+    def refunds_of_r_confirmed(self):
+        return Payment.objects.filter(reservation_id=R_CONFIRMED, type="REFUND").count()
+
     def test_official_reservation_cancelled_is_processed_and_acked(self):
         self.assertEqual(self.deliver(CANCELLED, load_event("ReservationCancelled")), "processed")
         self.channel.basic_ack.assert_called_once_with(delivery_tag=1)
-        self.assertEqual(Payment.objects.filter(type="REFUND").count(), 1)
+        self.assertEqual(self.refunds_of_r_confirmed(), 2)  # rental 450 + deposit 500
 
-    def test_official_return_settled_is_processed_and_acked(self):
-        self.assertEqual(self.deliver(SETTLED, load_event("ReturnSettled")), "processed")
+    def test_new_return_settled_is_processed_and_acked(self):
+        event = {**load_event("ReturnSettled"), "eventId": str(uuid.uuid4())}
+        event["data"] = {**event["data"], "reservationId": str(R_CONFIRMED), "depositToRelease": 500.0}
+        self.assertEqual(self.deliver(SETTLED, event), "processed")
         self.channel.basic_ack.assert_called_once()
-        self.assertEqual(Payment.objects.filter(type="EXTRA_FEE", status="PENDING").count(), 2)
+        self.assertEqual(Payment.objects.filter(reservation_id=R_CONFIRMED, type="EXTRA_FEE").count(), 2)
+
+    def test_official_return_settled_already_in_demo_data_is_acked_as_duplicate(self):
+        self.assertEqual(self.deliver(SETTLED, load_event("ReturnSettled")), "duplicate")
+        self.channel.basic_ack.assert_called_once()
 
     def test_duplicate_is_acked_without_effect(self):
         event = load_event("ReservationCancelled")
         self.deliver(CANCELLED, event)
         self.assertEqual(self.deliver(CANCELLED, event), "duplicate")
         self.assertEqual(self.channel.basic_ack.call_count, 2)
-        self.assertEqual(Payment.objects.filter(type="REFUND").count(), 1)
+        self.assertEqual(self.refunds_of_r_confirmed(), 2)
 
     def test_malformed_messages_go_straight_to_dlq(self):
         cases = {
@@ -81,7 +92,7 @@ class ConsumerTests(TestCase):
         self.channel.basic_nack.assert_called_with(delivery_tag=1, requeue=True)
         self.assertEqual(self.deliver(CANCELLED, event, redelivered=True), "dlq")
         self.channel.basic_nack.assert_called_with(delivery_tag=1, requeue=False)
-        self.assertFalse(Payment.objects.filter(type="REFUND").exists())
+        self.assertEqual(self.refunds_of_r_confirmed(), 0)
 
 
 class DeclareQueueTests(SimpleTestCase):
