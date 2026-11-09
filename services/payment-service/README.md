@@ -255,17 +255,15 @@ Erreurs `{status, error, message, details[{field, message}]}` pour **toutes** le
 | p-confirmed | `d76b538e-e367-4bb3-966b-98a4d9dc93a5` | r-confirmed (client1) | RENTAL | 450.000 | SUCCEEDED (+ facture) |
 | p-confirmed-deposit | `527d092e-2fc3-409c-bb3b-525e074ceb93` | r-confirmed (client1) | DEPOSIT | 500.000 | SUCCEEDED |
 | p-completed | `918e07dc-4995-4985-8373-aad04e13636f` | r-completed (client2) | RENTAL | 640.000 | SUCCEEDED (+ facture) |
-| p-completed-deposit | `a8a08a06-d754-4c24-804c-bd9b054c203a` | r-completed (client2) | DEPOSIT | 1000.000 | REFUNDED |
-| p-completed-refund | `18e87b10-0077-4935-ae0f-c82d51bea6cf` | r-completed (client2) | REFUND | 1000.000 | SUCCEEDED (rembourse p-completed-deposit) |
-| p-completed-late | `41a7146a-e36c-4c7c-a69c-08a2f6a0ef02` | r-completed (client2) | EXTRA_FEE (LATE) | 160.000 | PENDING |
-| p-completed-fuel | `7bd41b82-0e8d-4534-9628-95ee26382a3f` | r-completed (client2) | EXTRA_FEE (FUEL) | 35.000 | PENDING |
+| p-completed-deposit | `7ddc173a-865a-4a6b-981d-09f3ec2b6958` | r-completed (client2) | DEPOSIT | 1000.000 | SUCCEEDED |
 
 - **r-confirmed** : location et caution payées → contract-service peut remettre les clés
-  (somme des DEPOSIT SUCCEEDED ≥ `depositAmount`).
-- **r-completed** : état après `docs/events/ReturnSettled.json` (contrat c-completed clôturé) : caution rendue,
-  deux frais à payer par client2, facture des frais (195.000). L'`eventId` de cet exemple est enregistré comme déjà
-  traité : le republier est ignoré (doublon) au lieu de facturer deux fois.
-- Factures : `INV-2026-000001` (location r-completed), `000002` (frais r-completed), `000003` (location r-confirmed).
+  (somme des DEPOSIT SUCCEEDED ≥ `depositAmount`). `p-confirmed-deposit` est demandé par contract-service
+  (à ajouter dans `docs/demo-ids.md`).
+- **r-completed** : état **avant** `docs/events/ReturnSettled.json`, comme dans `docs/demo-ids.md`. Pour la démo,
+  publier ce message (console RabbitMQ, file `payment.return_settled`) : REFUND de 1000.000 (la caution passe
+  REFUNDED), frais LATE 160.000 et FUEL 35.000 en attente pour client2, facture des frais (195.000).
+- Factures : `INV-2026-000001` (location r-completed), `INV-2026-000002` (location r-confirmed).
 
 Exemple : client1 paie la location de r-pending (270.000 TND), avec le token `$t` obtenu ci-dessus.
 

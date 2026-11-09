@@ -12,6 +12,7 @@ from django.test import TestCase
 
 from payments.demo_data import (
     CLIENT1,
+    CLIENT2,
     P_COMPLETED_DEPOSIT,
     P_CONFIRMED,
     P_CONFIRMED_DEPOSIT,
@@ -82,14 +83,18 @@ class ReservationCancelledTests(EventTestCase):
 
 
 class ReturnSettledTests(EventTestCase):
-    def test_demo_data_already_contains_the_official_example(self):
-        """seed_demo = state after docs/events/ReturnSettled.json: replaying it changes nothing."""
-        self.assertEqual(Payment.objects.get(pk=P_COMPLETED_DEPOSIT).status, "REFUNDED")
-        self.assertEqual(Payment.objects.filter(reservation_id=R_COMPLETED, type="EXTRA_FEE", status="PENDING").count(), 2)
+    def test_official_example_refunds_demo_deposit_and_bills_fees(self):
+        """docs/demo-ids.md: r-completed deposit SUCCEEDED until ReturnSettled.json is processed."""
+        self.assertEqual(Payment.objects.get(pk=P_COMPLETED_DEPOSIT).status, "SUCCEEDED")
         event = load_event("ReturnSettled")
-        count, invoices = Payment.objects.count(), Invoice.objects.count()
-        self.assertTrue(handle_return_settled(event["eventId"], event["data"]).duplicate)
-        self.assertEqual((Payment.objects.count(), Invoice.objects.count()), (count, invoices))
+        result = handle_return_settled(event["eventId"], event["data"])
+        [refund] = result.refunds
+        self.assertEqual((refund.amount, refund.original_payment_id), (Decimal("1000.000"), P_COMPLETED_DEPOSIT))
+        self.assertEqual(Payment.objects.get(pk=P_COMPLETED_DEPOSIT).status, "REFUNDED")
+        self.assertEqual(sorted((f.fee_type, f.amount, f.status, f.user_id) for f in result.fees),
+                         [("FUEL", Decimal("35.000"), "PENDING", CLIENT2), ("LATE", Decimal("160.000"), "PENDING", CLIENT2)])
+        self.assertEqual(result.invoice.total, Decimal("195.000"))
+        self.assertEqual(Payment.objects.filter(reservation_id=R_COMPLETED).count(), 2 + 1 + 2)
 
     def test_paid_deposit_is_refunded_and_fees_billed(self):
         event_id, data = return_settled(R_CONFIRMED, 500.0)

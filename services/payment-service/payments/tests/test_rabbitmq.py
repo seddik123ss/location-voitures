@@ -14,7 +14,7 @@ from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from pika import exceptions as pika_exc
 
-from payments.demo_data import R_CONFIRMED
+from payments.demo_data import R_COMPLETED, R_CONFIRMED
 from payments.events import EventPublishError, build_event
 from payments.management.commands.consume_events import SUBSCRIPTIONS
 from payments.models import Payment
@@ -59,9 +59,11 @@ class ConsumerTests(TestCase):
         self.channel.basic_ack.assert_called_once()
         self.assertEqual(Payment.objects.filter(reservation_id=R_CONFIRMED, type="EXTRA_FEE").count(), 2)
 
-    def test_official_return_settled_already_in_demo_data_is_acked_as_duplicate(self):
-        self.assertEqual(self.deliver(SETTLED, load_event("ReturnSettled")), "duplicate")
+    def test_official_return_settled_is_processed_and_acked(self):
+        self.assertEqual(self.deliver(SETTLED, load_event("ReturnSettled")), "processed")
         self.channel.basic_ack.assert_called_once()
+        self.assertEqual(Payment.objects.filter(reservation_id=R_COMPLETED, type="EXTRA_FEE").count(), 2)
+        self.assertEqual(Payment.objects.filter(reservation_id=R_COMPLETED, type="REFUND").count(), 1)
 
     def test_duplicate_is_acked_without_effect(self):
         event = load_event("ReservationCancelled")
