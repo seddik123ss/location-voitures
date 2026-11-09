@@ -9,6 +9,7 @@ Un module = un rôle :
 - database.py          : connexion PostgreSQL (SQLAlchemy)
 - db_tables.py         : tables model_versions et prediction_logs
 - api_schemas.py       : formes JSON d'entrée/sortie (camelCase)
+- api_docs.py          : textes de Swagger (descriptions, exemples, réponses d'erreur)
 - error_handlers.py    : exceptions métier et format d'erreur commun
 - price_predictor.py   : prédiction (règles 422/503, occupation estimée, intervalle, log)
 - model_registry.py    : gestion des versions (liste, renommage, suppression, activation)

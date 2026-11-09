@@ -2,13 +2,439 @@
 info:
   title: ml-service
   version: 0.1.0
+  description: |
+    Tarification dynamique des locations de voitures (Feryel, FastAPI, port 8107, Eureka RENTAL-ML).
+
+    Le service propose un **prix journalier conseillé** (TND, 3 décimales) et un **intervalle à 90 %**,
+    calculés par la version **active** d'un modèle de régression (XGBoost en v1). Les versions du modèle
+    sont gérées par l'API (liste, renommage, suppression, activation, réentraînement).
+
+    - Erreurs au format commun `{status, error, message, details}` (docs/conventions.md).
+    - Montants en TND avec 3 décimales ; instants en UTC (ISO 8601).
+    - Sécurité : token Keycloak (realm location-voitures), rôles dans la clé `roles`.
+      Le rôle requis par chaque route est indiqué dans sa description et dans `x-roles`.
+    - Les dates des exemples doivent être dans le futur (moins de 180 jours) au moment de l'appel.
 servers:
   - url: http://localhost:8088
-    description: via la Gateway
-paths: {}
+    description: via la Gateway (routes /api/ml/**)
+tags:
+  - name: Prédiction de prix
+    description: Prix journalier conseillé par le modèle actif.
+  - name: Versions du modèle
+    description: Consulter, renommer, supprimer et activer les versions.
+  - name: Entraînement
+    description: Réentraîner le modèle et créer une nouvelle version.
+  - name: Interne (entre services)
+    description: Routes /internal, appelées directement par les autres services, jamais via la Gateway.
+  - name: Santé
+    description: État du service.
+
+paths:
+  /api/ml/price-predictions:
+    post:
+      tags: [Prédiction de prix]
+      operationId: createPricePrediction
+      summary: Prix journalier conseillé
+      description: |
+        Calcule le prix journalier conseillé et un intervalle à 90 %.
+        Le service calcule lui-même la saison, le jour de départ, la durée et le délai de réservation
+        (départ − aujourd'hui). Si `occupancyRate` est absent, il est estimé par la moyenne historique
+        de l'agence pour la saison du départ. Chaque prédiction est enregistrée.
+
+        **Règles (422)**, toutes renvoyées ensemble dans `details` :
+        catégorie ou agence inconnue ; départ dans le passé ou à plus de 180 jours ;
+        retour pas après le départ ; durée de plus de 30 jours ; `occupancyRate` hors de 0–1.
+
+        **Rôles** : CLIENT, AGENT, ADMIN.
+      x-roles: [CLIENT, AGENT, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        $ref: '#/components/requestBodies/PricePredictionRequest'
+      responses:
+        '200':
+          description: Prix conseillé et intervalle
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PricePrediction' }
+        '400': { $ref: '#/components/responses/InvalidJson' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/PredictionInvalid' }
+        '503': { $ref: '#/components/responses/NoActiveModel' }
+
+  /api/ml/models:
+    get:
+      tags: [Versions du modèle]
+      operationId: listModelVersions
+      summary: Lister les versions
+      description: |
+        Liste paginée des versions du modèle, la plus récente d'abord.
+
+        **Rôles** : AGENT, ADMIN.
+      x-roles: [AGENT, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Une page de versions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelVersionPage' }
+        '400': { $ref: '#/components/responses/InvalidPagination' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/ml/models/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ModelId'
+      - $ref: '#/components/parameters/CorrelationId'
+    get:
+      tags: [Versions du modèle]
+      operationId: getModelVersion
+      summary: Détail d'une version
+      description: |
+        Détail d'une version, avec ses métriques mesurées sur le jeu de test.
+
+        **Rôles** : AGENT, ADMIN.
+      x-roles: [AGENT, ADMIN]
+      responses:
+        '200':
+          description: La version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelVersion' }
+        '400': { $ref: '#/components/responses/InvalidId' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ModelNotFound' }
+    put:
+      tags: [Versions du modèle]
+      operationId: renameModelVersion
+      summary: Renommer une version
+      description: |
+        Seul `name` est modifiable. `version`, `metrics` et `trainedAt` sont en lecture seule ;
+        `active` se change uniquement avec `/activate`. Tout autre champ donne une 422.
+
+        **Rôles** : ADMIN.
+      x-roles: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelVersionUpdate' }
+      responses:
+        '200':
+          description: La version renommée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelVersion' }
+        '400': { $ref: '#/components/responses/InvalidId' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ModelNotFound' }
+        '422': { $ref: '#/components/responses/UpdateInvalid' }
+    delete:
+      tags: [Versions du modèle]
+      operationId: deleteModelVersion
+      summary: Supprimer une version inactive
+      description: |
+        Supprime une version **inactive** et son fichier `.joblib`. Les logs de prédiction sont conservés
+        (lien mis à NULL ; le numéro de version reste dans leur sortie). 409 si la version est active.
+
+        **Rôles** : ADMIN.
+      x-roles: [ADMIN]
+      responses:
+        '204':
+          description: Version supprimée
+        '400': { $ref: '#/components/responses/InvalidId' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ModelNotFound' }
+        '409': { $ref: '#/components/responses/DeleteActiveConflict' }
+
+  /api/ml/models/{id}/activate:
+    parameters:
+      - $ref: '#/components/parameters/ModelId'
+      - $ref: '#/components/parameters/CorrelationId'
+    post:
+      tags: [Versions du modèle]
+      operationId: activateModelVersion
+      summary: Activer une version
+      description: |
+        Rend cette version active et désactive l'ancienne dans une seule transaction.
+        Une seule version est active à la fois (garanti aussi par un index unique en base).
+
+        **Rôles** : ADMIN.
+      x-roles: [ADMIN]
+      responses:
+        '200':
+          description: La version, maintenant active
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelVersion' }
+        '400': { $ref: '#/components/responses/InvalidId' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ModelNotFound' }
+        '409': { $ref: '#/components/responses/ActivateFileConflict' }
+
+  /api/ml/trainings:
+    post:
+      tags: [Entraînement]
+      operationId: trainModel
+      summary: Réentraîner le modèle (nouvelle version)
+      description: |
+        Réentraîne le modèle (environ 2 s) : découpage 60/20/20, entraînement de LinearRegression,
+        RandomForest et XGBoost, choix du meilleur et calcul de l'intervalle sur la validation,
+        métriques finales mesurées sur le test. Pas de corps de requête.
+
+        La nouvelle version est créée **inactive**. Son numéro vient d'une séquence PostgreSQL :
+        il n'est jamais réutilisé, même après une suppression.
+
+        **Rôles** : ADMIN.
+      x-roles: [ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '201':
+          description: Version créée (inactive)
+          headers:
+            Location:
+              description: URL de la nouvelle version
+              schema: { type: string, example: /api/ml/models/80e95b35-fa4f-4e51-849d-7d3010b47d90 }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelVersion' }
+              example:
+                id: 80e95b35-fa4f-4e51-849d-7d3010b47d90
+                name: XGBoost
+                version: 3
+                metrics: { mae: 6.728, r2: 0.9875, intervalCoverage: 0.9075, validationMae: 6.934 }
+                trainedAt: '2026-11-09T19:10:37Z'
+                active: false
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /internal/ml/price-predictions:
+    servers:
+      - url: http://localhost:8107
+        description: ml-service en direct (adresse trouvée dans Eureka sous RENTAL-ML), jamais via la Gateway
+    post:
+      tags: [Interne (entre services)]
+      operationId: createInternalPricePrediction
+      summary: Prix journalier conseillé (appel entre services)
+      description: |
+        Même calcul et mêmes règles que `POST /api/ml/price-predictions`, pour reservation-service.
+        Contrat : docs/internal-api.md (sortie {dailyPrice, lowerBound, upperBound, modelVersion} + currency).
+
+        **Rôles** : INTERNAL (token de compte de service, client credentials).
+      x-roles: [INTERNAL]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        $ref: '#/components/requestBodies/PricePredictionRequest'
+      responses:
+        '200':
+          description: Prix conseillé et intervalle
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PricePrediction' }
+        '400': { $ref: '#/components/responses/InvalidJson' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/PredictionInvalid' }
+        '503': { $ref: '#/components/responses/NoActiveModel' }
+
+  /health:
+    servers:
+      - url: http://localhost:8107
+        description: ml-service en direct
+    get:
+      tags: [Santé]
+      operationId: health
+      summary: État du service
+      description: Route publique, sans token.
+      security: []
+      responses:
+        '200':
+          description: Service démarré
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: UP }
+
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Identifiant de suivi, renvoyé tel quel dans la réponse (créé par le service s'il manque).
+      schema: { type: string, example: 3f2c9a1e-7b1d-4c55-9a0e-2f6d8c1b4e77 }
+    ModelId:
+      name: id
+      in: path
+      required: true
+      description: UUID de la version du modèle
+      schema: { type: string, format: uuid, example: fce602f6-88ac-41b4-97da-01dacf575c7d }
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Numéro de page (commence à 0)
+      schema: { type: integer, minimum: 0, default: 0 }
+    Size:
+      name: size
+      in: query
+      required: false
+      description: Taille de page (1 à 100)
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  requestBodies:
+    PricePredictionRequest:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/PricePredictionRequest' }
+          examples:
+            occupationEstimee:
+              summary: SUV à Sousse, occupation estimée
+              value:
+                categoryId: a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c
+                agencyId: 1deb1dea-ab54-436d-8ed7-c3322f782c88
+                startDate: '2026-12-18'
+                endDate: '2026-12-22'
+            occupationFournie:
+              summary: Luxe à Tunis, occupation fournie (0.95)
+              value:
+                categoryId: 98d95d25-4112-4e52-8fbf-d2d908239b34
+                agencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+                startDate: '2026-12-18'
+                endDate: '2026-12-20'
+                occupancyRate: 0.95
+            demandeInvalide:
+              summary: Demande invalide (422 avec plusieurs erreurs)
+              value:
+                categoryId: 00000000-0000-4000-8000-000000000000
+                agencyId: 1deb1dea-ab54-436d-8ed7-c3322f782c88
+                startDate: '2026-10-01'
+                endDate: '2026-09-28'
+                occupancyRate: 1.5
+
+  responses:
+    InvalidJson:
+      description: Corps de requête illisible (JSON invalide)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 400, error: BAD_REQUEST, message: 'Corps de requête illisible : JSON invalide', details: [] }
+    InvalidId:
+      description: Identifiant qui n'est pas un UUID
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            status: 400
+            error: BAD_REQUEST
+            message: Paramètres de la requête invalides
+            details: [{ field: id, message: UUID invalide }]
+    InvalidPagination:
+      description: page < 0 ou size hors de 1..100
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            status: 400
+            error: BAD_REQUEST
+            message: Paramètres de la requête invalides
+            details:
+              - { field: page, message: valeur trop petite }
+              - { field: size, message: valeur trop grande }
+    Unauthorized:
+      description: Token absent, expiré ou invalide
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 401, error: UNAUTHORIZED, message: Token absent ou invalide, details: [] }
+    Forbidden:
+      description: Le token n'a pas le rôle requis
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 403, error: FORBIDDEN, message: Rôle insuffisant pour cette action, details: [] }
+    ModelNotFound:
+      description: Version introuvable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            status: 404
+            error: NOT_FOUND
+            message: Version de modèle 11111111-1111-4111-8111-111111111111 introuvable
+            details: []
+    PredictionInvalid:
+      description: Demande invalide ; toutes les erreurs sont listées dans details (une par champ)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            status: 422
+            error: UNPROCESSABLE_ENTITY
+            message: Demande de prédiction invalide
+            details:
+              - { field: categoryId, message: catégorie inconnue }
+              - { field: startDate, message: la date de départ est dans le passé }
+              - { field: endDate, message: la date de retour doit être après la date de départ }
+              - { field: occupancyRate, message: doit être compris entre 0 et 1 }
+    UpdateInvalid:
+      description: Nom vide ou champ non modifiable envoyé (seul name est modifiable)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            status: 422
+            error: UNPROCESSABLE_ENTITY
+            message: Données de la requête invalides
+            details: [{ field: active, message: champ non autorisé }]
+    DeleteActiveConflict:
+      description: La version est active ; en activer une autre avant de la supprimer
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            status: 409
+            error: CONFLICT
+            message: "Impossible de supprimer la version active : activez d'abord une autre version"
+            details: []
+    ActivateFileConflict:
+      description: Le fichier .joblib de cette version est introuvable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            status: 409
+            error: CONFLICT
+            message: 'Fichier du modèle v2 introuvable : activation impossible'
+            details: []
+    NoActiveModel:
+      description: Aucune version active ; le service ne peut pas calculer de prix
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            status: 503
+            error: SERVICE_UNAVAILABLE
+            message: 'Aucun modèle actif : activez une version avec POST /api/ml/models/{id}/activate'
+            details: []
+
   schemas:
     Error:
       type: object
@@ -16,7 +442,7 @@ components:
       properties:
         status: { type: integer, example: 409 }
         error: { type: string, example: CONFLICT }
-        message: { type: string, example: Ce véhicule est déjà réservé sur ces dates }
+        message: { type: string, example: "Impossible de supprimer la version active : activez d'abord une autre version" }
         details:
           type: array
           items:
@@ -31,5 +457,79 @@ components:
         page: { type: integer, example: 0 }
         size: { type: integer, example: 20 }
         total: { type: integer, example: 57 }
+
+    PricePredictionRequest:
+      type: object
+      required: [categoryId, agencyId, startDate, endDate]
+      additionalProperties: false
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+          description: Catégorie de véhicule (UUID du vehicle-service)
+          example: a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c
+        agencyId:
+          type: string
+          format: uuid
+          description: Agence de départ (UUID du vehicle-service)
+          example: 1deb1dea-ab54-436d-8ed7-c3322f782c88
+        startDate:
+          type: string
+          format: date
+          description: Date de départ, aujourd'hui au plus tôt, au plus dans 180 jours
+          example: '2026-12-18'
+        endDate:
+          type: string
+          format: date
+          description: Date de retour, après le départ, durée de 30 jours au plus
+          example: '2026-12-22'
+        occupancyRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Optionnel. Sinon estimé par la moyenne historique agence × saison
+          example: 0.85
+    PricePrediction:
+      type: object
+      required: [dailyPrice, lowerBound, upperBound, currency, modelVersion]
+      properties:
+        dailyPrice: { type: number, description: 'Prix journalier conseillé (TND, 3 décimales)', example: 154.471 }
+        lowerBound: { type: number, description: Bas de l'intervalle à 90 % (TND), example: 140.6 }
+        upperBound: { type: number, description: Haut de l'intervalle à 90 % (TND), example: 168.08 }
+        currency: { type: string, example: TND }
+        modelVersion: { type: integer, description: Numéro de la version du modèle utilisée, example: 1 }
+    ModelMetrics:
+      type: object
+      description: Mesurées sur le jeu de test (validationMae sur la validation)
+      properties:
+        mae: { type: number, description: Erreur absolue moyenne (TND), example: 6.728 }
+        r2: { type: number, description: Coefficient de détermination, example: 0.9875 }
+        intervalCoverage: { type: number, description: Part des prix réels dans l'intervalle, example: 0.9075 }
+        validationMae: { type: number, description: MAE sur la validation (choix du modèle), example: 6.934 }
+    ModelVersion:
+      type: object
+      required: [id, name, version, metrics, trainedAt, active]
+      properties:
+        id: { type: string, format: uuid, example: fce602f6-88ac-41b4-97da-01dacf575c7d }
+        name: { type: string, description: Nom lisible (modifiable), example: XGBoost }
+        version: { type: integer, description: 'Numéro de version, jamais réutilisé', example: 1 }
+        metrics: { $ref: '#/components/schemas/ModelMetrics' }
+        trainedAt: { type: string, format: date-time, description: Date d'entraînement (UTC), example: '2026-11-09T18:40:09Z' }
+        active: { type: boolean, description: Vrai pour la seule version qui calcule les prix, example: true }
+    ModelVersionUpdate:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, example: XGBoost (démo) }
+    ModelVersionPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/ModelVersion' }
+
 security:
   - bearerAuth: []

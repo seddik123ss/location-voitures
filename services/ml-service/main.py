@@ -3,18 +3,32 @@ import uuid
 
 from fastapi import FastAPI, Request
 
-from app import internal_routes, public_routes
+from app import api_docs, internal_routes, public_routes
 from app.error_handlers import register_error_handlers
 
 app = FastAPI(
     title="ml-service",
-    description="Tarification dynamique des locations de voitures (prix journalier conseillé).",
     version="0.1.0",
+    description=(
+        "Tarification dynamique des locations de voitures : **prix journalier conseillé** "
+        "(TND, 3 décimales) et intervalle à 90 %, calculés par un modèle XGBoost versionné.\n\n"
+        "Erreurs au format commun `{status, error, message, details}`. "
+        "Contrat de l'équipe : `docs/openapi/ml-service.yaml`."
+    ),
+    openapi_tags=api_docs.OPENAPI_TAGS,
 )
 
 register_error_handlers(app)
 app.include_router(public_routes.router)
 app.include_router(internal_routes.router)
+
+
+def build_openapi_schema() -> dict:
+    """Document OpenAPI de FastAPI, sans les réponses 422 qu'il ajoute d'office (voir api_docs)."""
+    return api_docs.remove_default_validation_errors(FastAPI.openapi(app))
+
+
+app.openapi = build_openapi_schema
 
 
 @app.middleware("http")
@@ -26,6 +40,6 @@ async def propagate_correlation_id(request: Request, call_next):
     return response
 
 
-@app.get("/health", tags=["Santé"], summary="État du service")
+@app.get("/health", tags=["Santé"], summary="État du service", responses=api_docs.HEALTH_RESPONSE)
 def health() -> dict:
     return {"status": "UP"}
