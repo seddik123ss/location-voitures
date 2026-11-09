@@ -12,6 +12,8 @@ puis suit la réservation jusqu'à la fin de la location (paiement, remise du v�
 | Routes publiques | `/api/reservations/**`, via la Gateway (http://localhost:8088 → `lb://RENTAL-RESERVATION`) |
 | Routes entre services | `/internal/reservations/**` (token de compte de service, rôle INTERNAL) |
 | Sécurité | access token Keycloak (realm `location-voitures`), vérifié par le service (JWKS) |
+| Documentation | Swagger UI http://localhost:8103/api/doc ; contrat partagé `docs/openapi/reservation-service.yaml` |
+| Interface | pages Angular dans `frontend/src/app/features/reservations/` |
 
 Conventions communes : `docs/conventions.md`, `docs/internal-api.md`, `docs/events/README.md`, `docs/demo-ids.md`.
 
@@ -26,8 +28,11 @@ Conventions communes : `docs/conventions.md`, `docs/internal-api.md`, `docs/even
 - [Messages RabbitMQ](#messages-rabbitmq)
 - [Appels aux autres services](#appels-aux-autres-services)
 - [Variables d'environnement](#variables-denvironnement)
+- [Documentation OpenAPI](#documentation-openapi)
+- [Pages Angular](#pages-angular)
 - [Tests](#tests)
 - [Données de démonstration](#données-de-démonstration)
+- [Utilisation de l'IA](#utilisation-de-lia)
 
 ## Lancer en local
 
@@ -76,6 +81,7 @@ Le script `scripts/test-internal.ps1` appelle les routes `/internal` avec un vra
 | Méthode et route | Qui | Rôle | Succès |
 | --- | --- | --- | --- |
 | `GET /api/reservations` | tous | Liste paginée, plus récentes d'abord ; filtres `page`, `size` (1 à 100), `status`, `userId`, `vehicleId`. Un CLIENT ne voit que les siennes. | 200 |
+| `POST /api/reservations/quote` | tous | Devis sans création : mêmes contrôles que la création, prix fixe et prix conseillé par ml-service. | 200 |
 | `POST /api/reservations` | tous | Crée une réservation PENDING. Un AGENT ou un ADMIN donne le `userId` du client. | 201 + `Location` |
 | `GET /api/reservations/{id}` | propriétaire, AGENT, ADMIN | Détail avec `statusHistory` et `allowedTransitions`. | 200 |
 | `PUT /api/reservations/{id}` | propriétaire, AGENT, ADMIN | Nouvelles dates ou agence de retour, en PENDING seulement ; prix recalculé. | 200 |
@@ -168,6 +174,12 @@ COMPLETED et CANCELLED sont finaux. Chaque changement est gardé dans `reservati
 | 5 | Pas de chevauchement avec une réservation PENDING, CONFIRMED ou ONGOING du véhicule (un retour le jour d'un départ est permis) | 409 |
 | 7 | `totalPrice` = (endDate − startDate) jours × `dailyRate` de la catégorie ; `depositAmount` = `deposit` de la catégorie | |
 
+**Prix conseillé.** Le devis (`/quote`) appelle aussi `POST /internal/ml/price-predictions` sur RENTAL-ML
+(`{categoryId, agencyId, startDate, endDate}` → `{dailyPrice, lowerBound, upperBound, modelVersion}`) et renvoie
+`suggestedPrice`. C'est une information pour le client : le prix facturé reste le prix fixe, que payment-service compare au
+paiement RENTAL. Si le modèle est absent, en erreur ou illisible, `suggestedPrice` vaut `null` (repli sur le prix fixe) ;
+en `LOOKUP_MODE=demo`, il n'y a pas d'appel et `suggestedPrice` vaut `null`.
+
 | Code | Quand |
 | --- | --- |
 | 400 | Champ manquant ou invalide, dates (`details` liste les champs) |
@@ -247,6 +259,49 @@ Dans `.env` (modèle versionné : `.env.example`, sans secret).
 | `RABBITMQ_URL` | amqp://guest:guest@localhost:5672 | RabbitMQ |
 | `LOOKUP_MODE` | demo | `demo` ou `eureka` |
 
+## Documentation OpenAPI
+
+Générée par `darkaonline/l5-swagger` à partir des attributs PHP 8 (`#[OA\...]`) : les opérations sont décrites sur les
+méthodes des contrôleurs, les schémas, paramètres et réponses d'erreur communs dans `app/OpenApi/`. Chaque route a un résumé,
+ses paramètres, son corps, des exemples, et ses réponses de succès et d'erreur.
+
+| | |
+| --- | --- |
+| Swagger UI | http://localhost:8103/api/doc (bouton « Authorize » : coller un access token) |
+| Contrat JSON | http://localhost:8103/docs |
+| Contrat partagé | `docs/openapi/reservation-service.yaml` |
+
+Après un changement de route, de corps ou de réponse, régénérer le contrat partagé :
+
+```
+composer openapi:dump
+```
+
+Il écrit le fichier en UTF-8 sans BOM avec des fins de ligne LF (une redirection `>` sous PowerShell 5.1 écrirait de l'UTF-16).
+Le test `OpenApiTest` échoue si le contrat partagé n'est plus à jour, ou si une route n'est pas documentée avec ses erreurs.
+En développement, `L5_SWAGGER_GENERATE_ALWAYS=true` (dans `.env`) régénère la documentation à chaque affichage de Swagger UI.
+
+## Pages Angular
+
+Dans `frontend/src/app/features/reservations/`, chargées par la route `/reservations` (rôles CLIENT, AGENT, ADMIN), appels
+`/api/reservations` via le proxy Angular et la Gateway :
+
+| Page | Contenu |
+| --- | --- |
+| `/reservations` | « Mes réservations » pour un CLIENT, toutes les réservations pour un AGENT ou un ADMIN ; filtres (statut ; client et véhicule pour AGENT / ADMIN), pagination |
+| `/reservations/new` | Réserver : véhicule, dates, agence de retour (et client pour AGENT / ADMIN) ; « Voir le prix » affiche le prix, la caution et le prix conseillé ; « Réserver » crée la réservation |
+| `/reservations/:id` | Détail et historique ; annuler avec un motif (PENDING ou CONFIRMED) ; modifier les dates (PENDING) ; AGENT / ADMIN : confirmer, remettre le véhicule, terminer ; ADMIN : supprimer une réservation annulée |
+
+Les erreurs du service (400, 409, 422, 503...) sont affichées avec leur message et leur détail par champ.
+Tant que le module Véhicules n'est pas branché, la liste des véhicules du formulaire reprend ceux de `docs/demo-ids.md`
+(un autre véhicule se choisit par son UUID).
+
+```
+cd frontend
+npm ci
+npm start           # http://localhost:4200, connexion Keycloak (client1 / client1_pwd)
+```
+
 ## Tests
 
 ```
@@ -266,6 +321,9 @@ par des doublures (`tests/Support/`). Les dates sont figées au 2026-11-09.
 | `MessageProcessorTest` | PaymentSucceeded, ContractClosed (CONFIRMED et ONGOING → COMPLETED), doublons, DLQ, remise en file |
 | `PublishedEventsTest` | ReservationCancelled et ReservationCompleted au format de `docs/events/`, annulation refusée sans RabbitMQ |
 | `EurekaCommandTest` | Enregistrement, battements, réenregistrement, retrait à l'arrêt |
+| `OpenApiTest` | Swagger UI, chaque route documentée avec ses erreurs, contrat partagé à jour |
+
+Les pages Angular sont vérifiées par la compilation (`npx ng build` dans `frontend/`).
 
 ## Données de démonstration
 
@@ -278,3 +336,35 @@ par des doublures (`tests/Support/`). Les dates sont figées au 2026-11-09.
 | r-completed | 30eeff32-a413-42fb-9845-8ede4b7f98e0 | client2 | v3 | 2026-10-01 au 2026-10-05 | COMPLETED | 640.000 | 1000.000 |
 
 Comptes Keycloak : `client1` / `client1_pwd`, `client2` / `client2_pwd`, `agent1` / `agent1_pwd`, `admin1` / `admin1_pwd`.
+
+## Utilisation de l'IA
+
+J'ai développé ce service avec un assistant de programmation IA, utilisé dans VS Code, comme le permet le module.
+
+**Ce que l'assistant a fait**, étape par étape et à ma demande :
+
+- lire les documents communs de l'équipe (`docs/conventions.md`, `docs/internal-api.md`, `docs/events/`, `docs/demo-ids.md`) et le code
+  de complaint-service, puis proposer un plan en six étapes ;
+- écrire le code (migrations, modèles, règles métier, sécurité JWT, Eureka, RabbitMQ, appels aux autres services), les tests
+  PHPUnit, la documentation OpenAPI, les pages Angular et ce README ;
+- lancer les tests et des démonstrations sur la vraie infrastructure (MySQL, Keycloak, Eureka, Gateway, RabbitMQ, conteneur de
+  user-service), et me montrer les résultats à la fin de chaque étape ;
+- relire le code des autres services (payment, contract, user, vehicle) pour vérifier que mes formats correspondent à ce qu'ils lisent.
+
+**Ce que j'ai fait moi-même :**
+
+- choisir l'ordre des étapes et valider chacune avant de passer à la suivante ;
+- prendre les décisions de conception, en accord avec l'équipe : une réservation PENDING, CONFIRMED ou ONGOING bloque le véhicule ;
+  le passage en ONGOING par un AGENT ou un ADMIN ; le passage par ONGOING à la réception de ContractClosed (proposition de Rania) ;
+  le prix facturé égal au prix fixe, le prix du ML restant une information ;
+- échanger avec les autres membres (Fadi, Montassar, Rania) sur les formats et tester leurs services avec le mien ;
+- relire le code, les messages d'erreur et la documentation.
+
+**Ce que la vérification a permis de corriger** (exemples) : les UUID v7 générés par défaut par Laravel au lieu des UUID v4 de la
+convention ; les montants écrits `270.0` au lieu de `270.000` ; des 503 prévus qui écrivaient une trace d'erreur complète dans le log.
+Le passage à Laravel 12 vient d'un blocage réel : Composer refuse toutes les versions de Laravel 11 (failles non corrigées).
+
+**Limites** : l'assistant n'a modifié aucun document commun de l'équipe (les écarts trouvés m'ont été signalés), ni aucun fichier
+hors de `services/reservation-service`, `frontend/src/app/features/reservations` et `docs/openapi/reservation-service.yaml`.
+Aucun secret n'est versionné : le secret Keycloak du service reste dans `.env`. Les pages Angular ont été vérifiées par la compilation,
+pas encore par des tests de bout en bout dans le navigateur.

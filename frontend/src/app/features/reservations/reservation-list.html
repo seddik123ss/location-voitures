@@ -1,0 +1,132 @@
+<div class="head">
+  <div>
+    <h1>{{ staff ? 'Réservations' : 'Mes réservations' }}</h1>
+    <p class="sub">
+      {{
+        staff
+          ? 'Toutes les réservations des clients.'
+          : 'Vos locations passées, en cours et à venir.'
+      }}
+    </p>
+  </div>
+  <a class="btn primary" routerLink="new">Réserver un véhicule</a>
+</div>
+
+<form class="card filters" (ngSubmit)="search()">
+  <label>
+    Statut
+    <select name="status" [ngModel]="status()" (ngModelChange)="status.set($event)">
+      <option value="">Tous</option>
+      @for (s of statuses; track s) {
+        <option [value]="s">{{ statusLabels[s] }}</option>
+      }
+    </select>
+  </label>
+  @if (staff) {
+    <label class="grow">
+      Client (UUID)
+      <input
+        name="userId"
+        placeholder="ex. f4d1bab3-468d-428d-b02c-b44341430bfd"
+        [ngModel]="userId()"
+        (ngModelChange)="userId.set($event)"
+      />
+    </label>
+    <label class="grow">
+      Véhicule (UUID)
+      <input
+        name="vehicleId"
+        placeholder="ex. ecdcc60f-ed6a-4007-8622-2b568338ef7a"
+        [ngModel]="vehicleId()"
+        (ngModelChange)="vehicleId.set($event)"
+      />
+    </label>
+  }
+  <div class="actions">
+    <button class="btn primary" type="submit" [disabled]="invalidIds()">Filtrer</button>
+    <button class="btn" type="button" (click)="reset()">Effacer</button>
+  </div>
+  @if (invalidIds()) {
+    <span class="invalid">UUID attendu</span>
+  }
+</form>
+
+@if (notice()) {
+  <div class="alert ok">{{ notice() }}</div>
+}
+@if (error()) {
+  <div class="alert">{{ error() }}</div>
+}
+
+@if (result(); as r) {
+  @if (r.items.length === 0) {
+    <div class="card empty">
+      {{
+        staff
+          ? 'Aucune réservation ne correspond à ces filtres.'
+          : "Vous n'avez aucune réservation" + (status() ? ' avec ce statut.' : '.')
+      }}
+    </div>
+  } @else {
+    <div class="card table">
+      <table>
+        <thead>
+          <tr>
+            <th>Véhicule</th>
+            <th>Du</th>
+            <th>Au</th>
+            <th>Départ</th>
+            <th>Prix</th>
+            <th>Statut</th>
+            @if (staff) {
+              <th>Client</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of r.items; track r.id) {
+            <tr>
+              <td>
+                <a [routerLink]="r.id">{{ vehicleLabel(r.vehicleId) }}</a>
+              </td>
+              <td>{{ r.startDate | date: 'dd/MM/yyyy' }}</td>
+              <td>{{ r.endDate | date: 'dd/MM/yyyy' }}</td>
+              <td>{{ agencyName(r.pickupAgencyId) }}</td>
+              <td class="amount">{{ r.totalPrice | currency: r.currency : 'code' : '1.3-3' }}</td>
+              <td>
+                <span class="badge s-{{ r.status }}">{{ statusLabels[r.status] }}</span>
+              </td>
+              @if (staff) {
+                <td class="mono" [title]="r.userId">{{ r.userId.slice(0, 8) }}…</td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span
+        >{{ r.total }} réservation{{ r.total > 1 ? 's' : '' }} · page {{ r.page + 1 }} /
+        {{ pageCount() }}</span
+      >
+      <button
+        class="btn"
+        type="button"
+        [disabled]="r.page === 0 || loading()"
+        (click)="goTo(r.page - 1)"
+      >
+        Précédente
+      </button>
+      <button
+        class="btn"
+        type="button"
+        [disabled]="r.page + 1 >= pageCount() || loading()"
+        (click)="goTo(r.page + 1)"
+      >
+        Suivante
+      </button>
+    </div>
+  }
+} @else if (loading()) {
+  <p class="sub">Chargement…</p>
+}
