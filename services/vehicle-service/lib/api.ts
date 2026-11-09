@@ -68,4 +68,22 @@ export function handle<C>(fn: (req: Request, ctx: C) => Promise<Response>) {
       return errorResponse(500, "INTERNAL_ERROR", "Erreur interne");
     }
   };
+  
+}
+
+// Valide les paramètres de l'URL (?fuel=DIESEL...) -> 400 si invalides
+export function parseQuery<T>(url: URL, schema: ZodType<T>): T {
+  const result = schema.safeParse(Object.fromEntries(url.searchParams));
+  if (!result.success) {
+    throw new ApiError(
+      badRequest(
+        "Paramètres invalides",
+        result.error.issues.map((i) => ({
+          field: i.path.map(String).join(".") || "query",
+          message: i.message,
+        }))
+      )
+    );
+  }
+  return result.data;
 }

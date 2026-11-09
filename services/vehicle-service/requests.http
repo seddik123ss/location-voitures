@@ -29,3 +29,42 @@ GET {{base}}/api/agencies
 
 ### 7. Agence inexistante (attendu : 404)
 GET {{base}}/api/agencies/00000000-0000-4000-8000-000000000000
+
+### 10. Catalogue complet (attendu : 200, total 6)
+GET {{base}}/api/vehicles
+
+### 11. Filtres : SUV automatiques disponibles (attendu : Kia + Hyundai)
+GET {{base}}/api/vehicles?categoryId=a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c&transmission=AUTOMATIC&status=AVAILABLE
+
+### 12. Prix max 100 TND/jour (attendu : les 3 économiques)
+GET {{base}}/api/vehicles?maxPrice=100
+
+### 13. Pagination (attendu : 2 véhicules, total 6)
+GET {{base}}/api/vehicles?page=0&size=2
+
+### 14. Filtre invalide (attendu : 400)
+GET {{base}}/api/vehicles?fuel=CHARBON
+
+### 15. Créer un véhicule (attendu : 201)
+POST {{base}}/api/vehicles
+Content-Type: application/json
+
+{ "plate": "200 TU 9999", "brand": "Dacia", "model": "Logan", "year": 2023, "fuel": "DIESEL", "transmission": "MANUAL", "seats": 5, "mileage": 5000, "categoryId": "94236cd0-16fc-41e0-bfc2-c8b1d2c8b1fc", "agencyId": "eb825ac4-855b-499b-b37a-b4c37bbd6b4e" }
+
+### 16. Même immatriculation (attendu : 409)
+POST {{base}}/api/vehicles
+Content-Type: application/json
+
+{ "plate": "200 TU 9999", "brand": "Dacia", "model": "Logan", "year": 2023, "fuel": "DIESEL", "transmission": "MANUAL", "seats": 5, "mileage": 5000, "categoryId": "94236cd0-16fc-41e0-bfc2-c8b1d2c8b1fc", "agencyId": "eb825ac4-855b-499b-b37a-b4c37bbd6b4e" }
+
+### 17. Catégorie inexistante (attendu : 404)
+POST {{base}}/api/vehicles
+Content-Type: application/json
+
+{ "plate": "201 TU 9999", "brand": "Dacia", "model": "Logan", "year": 2023, "fuel": "DIESEL", "transmission": "MANUAL", "seats": 5, "mileage": 5000, "categoryId": "00000000-0000-4000-8000-000000000000", "agencyId": "eb825ac4-855b-499b-b37a-b4c37bbd6b4e" }
+
+### 18. Supprimer v2, réservé (attendu : 409)
+DELETE {{base}}/api/vehicles/9f03ab2d-97a5-4c08-a952-dc6e446370d1
+
+### 19. Supprimer la Dacia créée au test 15 (attendu : 204) — colle son id
+DELETE {{base}}/api/vehicles/d4b67f99-7119-4ef7-ae1f-dc8737173633
