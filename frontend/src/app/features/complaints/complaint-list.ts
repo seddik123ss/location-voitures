@@ -51,6 +51,8 @@ export class ComplaintList {
   protected readonly result = signal<Page<ComplaintSummary> | null>(null);
   protected readonly loading = signal(false);
   protected readonly error = signal('');
+  /** Message laissé par la page précédente (ex. après une suppression). */
+  protected readonly notice = signal((history.state as { flash?: string } | null)?.flash ?? '');
 
   protected readonly userIdInvalid = computed(() => {
     const value = this.userId().trim();

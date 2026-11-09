@@ -36,6 +36,7 @@ export class ComplaintDetail implements OnInit {
 
   protected readonly me = currentUserId();
   protected readonly staff = hasRole('AGENT', 'ADMIN');
+  protected readonly admin = hasRole('ADMIN');
   protected readonly statusLabels = STATUS_LABELS;
   protected readonly categoryLabels = CATEGORY_LABELS;
   protected readonly priorityLabels = PRIORITY_LABELS;
@@ -58,8 +59,10 @@ export class ComplaintDetail implements OnInit {
     return c ? isFinal(c.status) : true;
   });
   protected readonly isOwner = computed(() => this.complaint()?.userId === this.me);
-  /** Modification et suppression : le client auteur, réclamation OPEN. */
+  /** Modification : le client auteur, réclamation OPEN. */
   protected readonly canEdit = computed(() => this.isOwner() && this.complaint()?.status === 'OPEN');
+  /** Suppression : le client auteur si OPEN, ou un ADMIN quel que soit le statut (règle de l'API). */
+  protected readonly canDelete = computed(() => this.canEdit() || (this.admin && this.complaint() !== null));
   protected readonly canWrite = computed(() => !this.final() && (this.staff || this.isOwner()));
 
   private id = '';
@@ -108,10 +111,13 @@ export class ComplaintDetail implements OnInit {
   }
 
   protected remove(): void {
-    if (!confirm('Supprimer définitivement cette réclamation ?')) {
+    const question = this.admin && !this.isOwner()
+      ? 'Supprimer définitivement cette réclamation du client, avec ses messages et son historique ?'
+      : 'Supprimer définitivement cette réclamation ?';
+    if (!confirm(question)) {
       return;
     }
-    this.run(this.api.delete(this.id), () => this.router.navigate(['/complaints']));
+    this.run(this.api.delete(this.id), () => this.router.navigate(['/complaints'], { state: { flash: 'Réclamation supprimée.' } }));
   }
 
   private reload(notice = ''): void {

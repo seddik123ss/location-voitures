@@ -12,9 +12,11 @@
         {{ categoryLabels[c.category] }} · créée le {{ c.createdAt | date: 'dd/MM/yyyy à HH:mm' }}
       </p>
     </div>
-    @if (canEdit()) {
+    @if (canDelete()) {
       <div class="actions">
-        <a class="btn" [routerLink]="['/complaints', c.id, 'edit']">Modifier</a>
+        @if (canEdit()) {
+          <a class="btn" [routerLink]="['/complaints', c.id, 'edit']">Modifier</a>
+        }
         <button class="btn danger" type="button" [disabled]="busy()" (click)="remove()">Supprimer</button>
       </div>
     }

@@ -54,6 +54,9 @@
   </div>
 </form>
 
+@if (notice()) {
+  <div class="alert ok">{{ notice() }}</div>
+}
 @if (error()) {
   <div class="alert">{{ error() }}</div>
 }
