@@ -2,7 +2,7 @@
 
 Contrat (docs/internal-api.md) : entrée {categoryId, agencyId, startDate, endDate},
 sortie {dailyPrice, lowerBound, upperBound, modelVersion} (+ currency).
-Plus tard : token de compte de service avec le rôle INTERNAL (keycloak_security.py).
+Sécurité : token de compte de service (client credentials) avec le rôle INTERNAL.
 """
 from typing import Annotated
 
@@ -12,8 +12,11 @@ from sqlalchemy.orm import Session
 from app import api_docs, price_predictor
 from app.api_schemas import PricePredictionRequest, PricePredictionResponse
 from app.database import get_db_session
+from app.keycloak_security import require_roles
 
-router = APIRouter(prefix="/internal/ml", tags=["Interne (entre services)"])
+router = APIRouter(prefix="/internal/ml", tags=["Interne (entre services)"],
+                   dependencies=[Depends(require_roles("INTERNAL"))],
+                   responses=api_docs.INTERNAL_SECURITY_ERRORS)
 
 
 @router.post("/price-predictions", response_model=PricePredictionResponse,

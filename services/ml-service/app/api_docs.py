@@ -18,7 +18,7 @@ OPENAPI_TAGS = [
     {"name": "Santé", "description": "État du service."},
 ]
 
-ROLES_NOTE = "\n\n**Rôles prévus** (dès que Keycloak sera branché) : {roles}."
+ROLES_NOTE = "\n\n**Rôle requis** (token Keycloak) : {roles}."
 
 
 # ---------- Construction des réponses d'erreur ----------
@@ -55,7 +55,8 @@ PREDICTION_INVALID = error_response(
         {"field": "occupancyRate", "message": "doit être compris entre 0 et 1"},
     ])
 NO_ACTIVE_MODEL = error_response(
-    "Aucune version active : le service ne peut pas calculer de prix", 503, "SERVICE_UNAVAILABLE",
+    "Aucune version active (ou Keycloak injoignable) : le service ne peut pas calculer de prix",
+    503, "SERVICE_UNAVAILABLE",
     "Aucun modèle actif : activez une version avec POST /api/ml/models/{id}/activate")
 UPDATE_INVALID = error_response(
     "Nom vide ou champ non modifiable envoyé (seul name est modifiable)", 422, "UNPROCESSABLE_ENTITY",
@@ -68,6 +69,20 @@ ACTIVATE_FILE_CONFLICT = error_response(
     "Fichier du modèle v2 introuvable : activation impossible")
 
 PREDICTION_ERRORS = {400: INVALID_JSON, 422: PREDICTION_INVALID, 503: NO_ACTIVE_MODEL}
+
+# Erreurs de sécurité, déclarées une fois par router (toutes les routes protégées)
+UNAUTHORIZED = error_response(
+    "Token absent, expiré ou invalide", 401, "UNAUTHORIZED",
+    "Token absent : en-tête Authorization: Bearer <token> attendu")
+FORBIDDEN_ADMIN = error_response(
+    "Token valide mais sans le rôle ADMIN", 403, "FORBIDDEN", "Rôle insuffisant : ADMIN requis")
+FORBIDDEN_INTERNAL = error_response(
+    "Token valide mais sans le rôle INTERNAL", 403, "FORBIDDEN", "Rôle insuffisant : INTERNAL requis")
+KEYCLOAK_UNAVAILABLE = error_response(
+    "Keycloak injoignable : le token ne peut pas être vérifié", 503, "SERVICE_UNAVAILABLE",
+    "Keycloak injoignable : impossible de vérifier le token")
+ADMIN_SECURITY_ERRORS = {401: UNAUTHORIZED, 403: FORBIDDEN_ADMIN, 503: KEYCLOAK_UNAVAILABLE}
+INTERNAL_SECURITY_ERRORS = {401: UNAUTHORIZED, 403: FORBIDDEN_INTERNAL, 503: KEYCLOAK_UNAVAILABLE}
 
 
 # ---------- Prédiction : description et exemples d'entrée ----------
@@ -119,8 +134,8 @@ PREDICTION_REQUEST_EXAMPLES = {
 
 # ---------- Versions du modèle et entraînement ----------
 
-LIST_DESCRIPTION = "Liste paginée des versions, la plus récente d'abord." + ROLES_NOTE.format(roles="AGENT, ADMIN")
-GET_DESCRIPTION = "Détail d'une version : métriques mesurées sur le jeu de test." + ROLES_NOTE.format(roles="AGENT, ADMIN")
+LIST_DESCRIPTION = "Liste paginée des versions, la plus récente d'abord." + ROLES_NOTE.format(roles="ADMIN")
+GET_DESCRIPTION = "Détail d'une version : métriques mesurées sur le jeu de test." + ROLES_NOTE.format(roles="ADMIN")
 UPDATE_DESCRIPTION = (
     "Seul `name` est modifiable. `version`, `metrics` et `trainedAt` sont en lecture seule ; "
     "`active` se change uniquement avec `/activate`." + ROLES_NOTE.format(roles="ADMIN"))
@@ -148,7 +163,7 @@ TRAINING_CREATED = {
 INTERNAL_PREDICTION_DESCRIPTION = (
     "Même calcul et mêmes règles que `POST /api/ml/price-predictions`, pour reservation-service. "
     "Contrat : docs/internal-api.md." + ROLES_NOTE.format(roles="INTERNAL (token de compte de service)"))
-PUBLIC_PREDICTION_DESCRIPTION = PREDICTION_DESCRIPTION + ROLES_NOTE.format(roles="CLIENT, AGENT, ADMIN")
+PUBLIC_PREDICTION_DESCRIPTION = PREDICTION_DESCRIPTION + ROLES_NOTE.format(roles="ADMIN")
 
 HEALTH_RESPONSE = {200: {"description": "Service démarré",
                          "content": {"application/json": {"example": {"status": "UP"}}}}}

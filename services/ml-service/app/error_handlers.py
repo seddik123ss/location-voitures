@@ -18,8 +18,9 @@ logger = logging.getLogger("ml-service")
 # ---------- Exceptions métier ----------
 
 class ApiError(Exception):
-    """Classe mère : chaque sous-classe fixe son code HTTP."""
+    """Classe mère : chaque sous-classe fixe son code HTTP (et, si besoin, des en-têtes)."""
     status_code = 500
+    headers: dict[str, str] = {}
 
     def __init__(self, message: str, details: list[dict] | None = None):
         super().__init__(message)
@@ -29,6 +30,17 @@ class ApiError(Exception):
 
 class BadRequestError(ApiError):
     status_code = 400
+
+
+class UnauthorizedError(ApiError):
+    """401 : token absent, expiré ou invalide. L'en-tête standard indique d'envoyer un token Bearer."""
+    status_code = 401
+    headers = {"WWW-Authenticate": "Bearer"}
+
+
+class ForbiddenError(ApiError):
+    """403 : token valide, mais sans le rôle requis."""
+    status_code = 403
 
 
 class NotFoundError(ApiError):
@@ -43,15 +55,21 @@ class BusinessValidationError(ApiError):
     status_code = 422
 
 
-class NoActiveModelError(ApiError):
+class ServiceUnavailableError(ApiError):
+    """503 : un service dont on dépend est indisponible (ex. Keycloak pour vérifier les tokens)."""
     status_code = 503
+
+
+class NoActiveModelError(ServiceUnavailableError):
+    """503 : aucune version du modèle n'est active."""
 
 
 # ---------- Construction de la réponse ----------
 
-def error_response(status_code: int, message: str, details: list[dict] | None = None) -> JSONResponse:
+def error_response(status_code: int, message: str, details: list[dict] | None = None,
+                   headers: dict[str, str] | None = None) -> JSONResponse:
     """Réponse JSON au format commun. error = nom standard du code (404 -> NOT_FOUND)."""
-    return JSONResponse(status_code=status_code, content={
+    return JSONResponse(status_code=status_code, headers=headers, content={
         "status": status_code,
         "error": HTTPStatus(status_code).name,
         "message": message,
@@ -93,8 +111,8 @@ def describe_validation_error(error: dict) -> dict:
 # ---------- Handlers ----------
 
 async def handle_api_error(request: Request, error: ApiError) -> JSONResponse:
-    """Nos exceptions métier (404, 409, 422, 503...)."""
-    return error_response(error.status_code, error.message, error.details)
+    """Nos exceptions métier (401, 403, 404, 409, 422, 503...)."""
+    return error_response(error.status_code, error.message, error.details, error.headers or None)
 
 
 async def handle_request_validation_error(request: Request, error: RequestValidationError) -> JSONResponse:

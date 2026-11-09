@@ -3,7 +3,7 @@
 Les fonctions restent courtes : elles reçoivent la requête et délèguent
 à price_predictor (prédiction), model_registry (versions) et model_training (entraînement).
 Les textes de Swagger sont dans api_docs.py.
-Plus tard, la sécurité Keycloak s'ajoutera ici : APIRouter(..., dependencies=[...]).
+Sécurité : toutes les routes /api/ml exigent un token Keycloak avec le rôle ADMIN (une seule ligne, sur le router).
 """
 import uuid
 from typing import Annotated
@@ -17,8 +17,10 @@ from app.api_schemas import (
     PricePredictionRequest, PricePredictionResponse,
 )
 from app.database import get_db_session
+from app.keycloak_security import require_roles
 
-router = APIRouter(prefix="/api/ml")
+router = APIRouter(prefix="/api/ml", dependencies=[Depends(require_roles("ADMIN"))],
+                   responses=api_docs.ADMIN_SECURITY_ERRORS)
 
 # Identifiant de version dans l'URL : {id} côté API, model_id côté Python
 # (on évite d'appeler une variable « id », qui masquerait la fonction id() de Python)

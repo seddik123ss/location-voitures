@@ -25,9 +25,10 @@ def test_prediction_returns_price_inside_interval_with_three_decimals(client, ru
     assert run_sql("SELECT count(*) FROM prediction_logs") == 1
 
 
-def test_internal_route_returns_same_price_as_public_route(client):
-    public_response = client.post("/api/ml/price-predictions", json=VALID_REQUEST)
-    internal_response = client.post("/internal/ml/price-predictions", json=VALID_REQUEST)
+def test_internal_route_returns_same_price_as_public_route(client, internal_headers):
+    public_response = client.post("/api/ml/price-predictions", json=VALID_REQUEST)          # token ADMIN
+    internal_response = client.post("/internal/ml/price-predictions", json=VALID_REQUEST,
+                                    headers=internal_headers)                               # token INTERNAL
 
     assert internal_response.status_code == 200
     assert internal_response.json() == public_response.json()

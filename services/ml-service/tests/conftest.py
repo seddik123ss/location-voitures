@@ -12,6 +12,7 @@ Création de la base de test (une seule fois) :
 import json
 import os
 import shutil
+import time
 from datetime import date
 
 import pytest
@@ -25,12 +26,14 @@ os.environ["DB_URL"] = TEST_DB_URL
 # Les tests ne s'inscrivent jamais dans Eureka (le TestClient déclenche le démarrage de l'application)
 os.environ["EUREKA_ENABLED"] = "false"
 
-from alembic import command  # noqa: E402  (imports après le réglage de DB_URL, volontairement)
+import jwt  # noqa: E402  (imports après le réglage de DB_URL, volontairement)
+from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
-from app import model_artifacts, model_training, price_predictor  # noqa: E402
+from app import keycloak_security, model_artifacts, model_training, price_predictor  # noqa: E402
 from app.database import engine  # noqa: E402
 from app.settings import SERVICE_DIR, settings  # noqa: E402
 from main import app  # noqa: E402
@@ -99,11 +102,50 @@ def fast_training(small_dataset_csv, monkeypatch):
                         lambda version: original_training(version, csv_path=small_dataset_csv))
 
 
+# ---------- Tokens de test (Keycloak simulé) ----------
+# On signe nos propres tokens avec une clé RSA de test. Seule la recherche de la clé publique
+# est remplacée : la vraie vérification (signature, exp, iss, rôles) est donc testée.
+TEST_SIGNING_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+OTHER_SIGNING_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)   # « faussaire »
+
+
+def create_token(roles: list[str], expires_in_seconds: int = 300, signing_key=TEST_SIGNING_KEY,
+                 issuer: str | None = None) -> str:
+    """Token JWT signé RS256, avec les mêmes claims utiles qu'un token Keycloak."""
+    now = int(time.time())
+    claims = {"iss": issuer or settings.keycloak_issuer, "sub": "test-user", "iat": now,
+              "exp": now + expires_in_seconds, "roles": roles, "preferred_username": "test"}
+    return jwt.encode(claims, signing_key, algorithm="RS256")
+
+
+def bearer(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def test_keycloak_public_key(monkeypatch):
+    """La « clé publique de Keycloak » est celle de notre paire de test."""
+    monkeypatch.setattr(keycloak_security, "get_signing_key", lambda token: TEST_SIGNING_KEY.public_key())
+
+
 @pytest.fixture
 def client():
-    """Client HTTP de test : envoie de vraies requêtes à l'application, sans lancer uvicorn."""
+    """Client HTTP de test avec un token ADMIN : envoie de vraies requêtes, sans lancer uvicorn."""
+    with TestClient(app, headers=bearer(create_token(["ADMIN"]))) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def anonymous_client():
+    """Client HTTP de test SANS token."""
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def internal_headers() -> dict:
+    """En-tête d'un compte de service (rôle INTERNAL), pour les routes /internal."""
+    return bearer(create_token(["INTERNAL"]))
 
 
 @pytest.fixture

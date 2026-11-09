@@ -20,10 +20,17 @@ class Settings(BaseSettings):
     # Intégrations
     eureka_url: str = "http://localhost:8761/eureka"
     eureka_enabled: bool = True          # false dans les tests : pas d'inscription dans Eureka
+    # Émetteur attendu dans les tokens (claim iss) ; les clés publiques sont lues dans son JWKS
     keycloak_issuer: str = "http://localhost:8180/realms/location-voitures"
+    keycloak_jwks_url: str = ""          # vide = <KEYCLOAK_ISSUER>/protocol/openid-connect/certs
     keycloak_client_id: str = "ml-service"
     keycloak_client_secret: str = ""
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
+
+    @property
+    def jwks_url(self) -> str:
+        """Adresse des clés publiques de Keycloak (JWKS)."""
+        return self.keycloak_jwks_url or f"{self.keycloak_issuer}/protocol/openid-connect/certs"
 
 
 settings = Settings()
