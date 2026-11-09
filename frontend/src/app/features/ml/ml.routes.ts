@@ -1,11 +1,13 @@
 import { Routes } from '@angular/router';
-import { Placeholder } from '../placeholder';
+import { ModelsDashboard } from './models-dashboard';
+import { PriceSimulator } from './price-simulator';
 
 /**
- * Routes du module Modèles ML (Feryel).
- * Remplacer la page provisoire par les composants du module, par exemple :
- *   { path: '', component: MaListe }, { path: ':id', component: MonDetail }
+ * Routes du module Modèles ML (Feryel). L'accès à /ml est réservé aux ADMIN (app.routes.ts).
+ *   /ml            -> tableau de bord des versions du modèle
+ *   /ml/simulator  -> simulateur de prix
  */
 export const ML_ROUTES: Routes = [
-  { path: '', component: Placeholder, data: { title: 'Modèles ML', owner: 'Feryel', module: 'ml' } },
+  { path: '', component: ModelsDashboard, title: 'Modèles ML · Versions' },
+  { path: 'simulator', component: PriceSimulator, title: 'Modèles ML · Simulateur de prix' },
 ];
