@@ -1,0 +1,74 @@
+@if (result(); as p) {
+  @switch (p.status) {
+    @case ('SUCCEEDED') {
+      <div class="alert success">
+        Paiement réussi : {{ typeLabels[p.type] }} de {{ p.amount | number: '1.3-3' }} {{ p.currency }}
+        (référence <code>{{ p.transactionRef }}</code>).
+        @if (p.type === 'RENTAL') { La facture est disponible dans <a routerLink="../invoices">vos factures</a>. }
+      </div>
+    }
+    @case ('FAILED') {
+      <div class="alert error">Paiement refusé : {{ p.failureReason }} Vous pouvez réessayer avec une autre carte.</div>
+    }
+    @case ('PENDING') {
+      <div class="alert info">
+        Virement enregistré (en attente). Il sera validé par un administrateur à réception des fonds.
+      </div>
+    }
+  }
+}
+
+@if (error()) {
+  <div class="alert error">
+    {{ error() }}
+    @if (details().length) { <ul>@for (d of details(); track d) { <li>{{ d }}</li> }</ul> }
+    @if (idempotency.retryWithSameKey()) {
+      <div class="hint">Le service n'a pas pu confirmer le paiement : vous pouvez réessayer sans risque de double
+        paiement (même clé d'idempotence).</div>
+    }
+  </div>
+}
+
+<div class="card">
+  <form class="grid" [formGroup]="form" (ngSubmit)="submit()">
+    <label>Réservation (UUID)
+      <input formControlName="reservationId" placeholder="01cb68ad-4eec-4bdd-8971-ce35381c59d1" />
+      @if (invalid('reservationId')) { <span class="field-error">UUID de réservation attendu.</span> }
+    </label>
+
+    <label>Objet du paiement
+      <select formControlName="type">
+        <option value="RENTAL">Location (prix total)</option>
+        <option value="DEPOSIT">Caution</option>
+      </select>
+    </label>
+
+    <label>Montant (TND)
+      <input formControlName="amount" inputmode="decimal" placeholder="270.000" />
+      @if (invalid('amount')) { <span class="field-error">Montant positif, 3 décimales au plus.</span> }
+      <span class="hint">Doit être égal au prix de la réservation (ou à sa caution).</span>
+    </label>
+
+    <label>Moyen de paiement
+      <select formControlName="method">
+        @for (m of methods; track m) { <option [value]="m">{{ methodLabels[m] }}</option> }
+      </select>
+      @if (form.controls.method.value === 'CASH') { <span class="hint">Encaissement à l'agence.</span> }
+      @if (form.controls.method.value === 'TRANSFER') { <span class="hint">Reste en attente jusqu'à validation.</span> }
+    </label>
+
+    @if (isCard) {
+      <label>Carte (simulation)
+        <input formControlName="cardToken" autocomplete="off" />
+        <span class="hint">Jeton de test, aucune donnée de carte n'est envoyée ni stockée.
+          Un jeton commençant par <code>fail_</code> simule un refus.</span>
+      </label>
+    }
+
+    <div class="actions">
+      <button type="submit" class="primary" [disabled]="sending()">
+        {{ sending() ? 'Paiement en cours…' : (idempotency.retryWithSameKey() ? 'Réessayer' : 'Payer') }}
+      </button>
+    </div>
+  </form>
+</div>
