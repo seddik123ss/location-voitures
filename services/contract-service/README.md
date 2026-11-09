@@ -65,7 +65,7 @@ Les frais sont facturés à part : la caution est libérée en entier (`depositT
 | GET | `/api/contracts/{id}` | CLIENT (le sien), AGENT, ADMIN | contrat + inspections + frais |
 | POST | `/api/contracts` | AGENT, ADMIN | remise des clés → 201 + `Location` |
 | PUT | `/api/contracts/{id}` | AGENT, ADMIN | modifie un contrat actif |
-| DELETE | `/api/contracts/{id}` | AGENT, ADMIN | supprime un contrat actif → 204 |
+| DELETE | `/api/contracts/{id}` | AGENT, ADMIN | supprime un contrat actif (remise annulée) et libère le véhicule → 204 |
 | POST | `/api/contracts/{id}/return` | AGENT, ADMIN | retour, frais, clôture |
 | GET | `/api/contracts/{id}/extra-fees` | CLIENT (le sien), AGENT, ADMIN | frais du contrat |
 | GET | `/api/inspections?contractId=` | AGENT, ADMIN | liste paginée des états des lieux |
@@ -100,7 +100,7 @@ Au démarrage, le journal affiche la liste des services simulés (`Services simu
 | File | Message | Quand | Publication |
 | --- | --- | --- | --- |
 | `vehicle.contract_events` | VehicleHandedOver | remise des clés | dans la transaction (503 si RabbitMQ absent) |
-| `vehicle.contract_events` | VehicleReturned | retour | dans la transaction |
+| `vehicle.contract_events` | VehicleReturned | retour, ou suppression d'un contrat actif (le véhicule redevient disponible) | dans la transaction |
 | `payment.return_settled` | ReturnSettled (frais + `depositToRelease`) | retour | dans la transaction |
 | `reservation.contract_closed` | ContractClosed | retour | best effort (simple log si RabbitMQ absent) |
 
@@ -157,7 +157,7 @@ cd services\contract-service
 dotnet test
 ```
 
-34 tests xUnit, sans Docker (base InMemory, RabbitMQ et Keycloak remplacés) :
+35 tests xUnit, sans Docker (base InMemory, RabbitMQ et Keycloak remplacés) :
 
 - `ContractsApiTests` : CRUD, pagination, 400 / 404 / 409 / 422, Location, 401 / 403, un CLIENT ne voit que ses contrats, `/internal` réservé au rôle INTERNAL, messages RabbitMQ publiés ;
 - `FeeCalculatorTests` : calcul des frais (dont le cas de `docs/events/ReturnSettled.json`) ;

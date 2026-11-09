@@ -203,6 +203,21 @@ public class ContractsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Delete_active_contract_publishes_VehicleReturned_to_free_the_vehicle()
+    {
+        var contract = await Read<ContractDto>(await CreateContract(FakeData.ReservationConfirmed, mileage: 28750));
+        _factory.Events.Published.Clear();
+
+        await _client.DeleteAsync($"/api/contracts/{contract.Id}");
+
+        var evt = Assert.Single(_factory.Events.Published);
+        Assert.Equal(("vehicle.contract_events", "VehicleReturned"), (evt.Queue, evt.Type));
+        var json = JsonSerializer.Serialize(evt.Data);
+        Assert.Contains("\"mileage\":28750", json);
+        Assert.Contains(contract.VehicleId.ToString(), json);
+    }
+
+    [Fact]
     public async Task Delete_closed_contract_returns_409()
     {
         var response = await _client.DeleteAsync($"/api/contracts/{SeedData.ContractCompletedId}");
