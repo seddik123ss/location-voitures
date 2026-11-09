@@ -22,6 +22,12 @@ abstract class TestCase extends BaseTestCase
         return $this->getJson($uri, $token === null ? [] : ['Authorization' => 'Bearer '.$token]);
     }
 
+    /** Requête JSON avec un token (aucun en-tête Authorization si $token est null). */
+    protected function api(string $method, string $uri, ?string $token, array $body = []): TestResponse
+    {
+        return $this->json($method, $uri, $body, $token === null ? [] : ['Authorization' => 'Bearer '.$token]);
+    }
+
     /** Vérifie une erreur au format commun {status, error, message, details?}. */
     protected function assertError(TestResponse $response, int $status, string $error, ?string $messagePart = null, array $fields = []): void
     {

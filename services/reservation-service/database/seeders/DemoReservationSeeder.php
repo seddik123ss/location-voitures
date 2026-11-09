@@ -25,10 +25,22 @@ class DemoReservationSeeder extends Seeder
             $reservation->updated_at = Carbon::parse($row['updatedAt']);
             $reservation->timestamps = false;
             $reservation->save();
+
+            $reservation->statusHistory()->delete();
+            foreach ($row['history'] as $i => [$from, $to, $at, $by, $comment]) {
+                $reservation->statusHistory()->create([
+                    'position' => $i + 1,
+                    'from_status' => $from,
+                    'to_status' => $to,
+                    'changed_at' => Carbon::parse($at),
+                    'changed_by' => $by,
+                    'comment' => $comment,
+                ]);
+            }
         }
     }
 
-    /** @return array<string, array{attributes: array<string, mixed>, createdAt: string, updatedAt: string}> */
+    /** @return array<string, array{attributes: array<string, mixed>, createdAt: string, updatedAt: string, history: list<array>}> */
     public static function rows(): array
     {
         return [
@@ -49,6 +61,9 @@ class DemoReservationSeeder extends Seeder
                 ],
                 'createdAt' => '2026-11-09T08:00:00Z',
                 'updatedAt' => '2026-11-09T08:00:00Z',
+                'history' => [
+                    [null, ReservationStatus::PENDING, '2026-11-09T08:00:00Z', DemoIds::CLIENT1, null],
+                ],
             ],
             // r-confirmed : client1, v2 (économique, Tunis), 5 jours x 90.000, payée par p-confirmed
             DemoIds::R_CONFIRMED => [
@@ -67,6 +82,11 @@ class DemoReservationSeeder extends Seeder
                 ],
                 'createdAt' => '2026-11-08T14:00:00Z',
                 'updatedAt' => '2026-11-08T14:30:00Z',
+                'history' => [
+                    [null, ReservationStatus::PENDING, '2026-11-08T14:00:00Z', DemoIds::CLIENT1, null],
+                    // Paiement RENTAL p-confirmed (message PaymentSucceeded) : changement automatique.
+                    [ReservationStatus::PENDING, ReservationStatus::CONFIRMED, '2026-11-08T14:30:00Z', null, 'Paiement RENTAL reçu'],
+                ],
             ],
             // r-completed : client2, v3 (SUV, Sousse), 4 jours x 160.000 ; bookedAt de docs/events/ReservationCompleted.json
             DemoIds::R_COMPLETED => [
@@ -85,6 +105,12 @@ class DemoReservationSeeder extends Seeder
                 ],
                 'createdAt' => '2026-09-15T10:12:00Z',
                 'updatedAt' => '2026-10-05T18:45:00Z',
+                'history' => [
+                    [null, ReservationStatus::PENDING, '2026-09-15T10:12:00Z', DemoIds::CLIENT2, null],
+                    [ReservationStatus::PENDING, ReservationStatus::CONFIRMED, '2026-09-15T10:30:00Z', null, 'Paiement RENTAL reçu'],
+                    [ReservationStatus::CONFIRMED, ReservationStatus::ONGOING, '2026-10-01T09:00:00Z', DemoIds::AGENT1, 'Véhicule remis au client'],
+                    [ReservationStatus::ONGOING, ReservationStatus::COMPLETED, '2026-10-05T18:45:00Z', null, 'Contrat clôturé'],
+                ],
             ],
         ];
     }
