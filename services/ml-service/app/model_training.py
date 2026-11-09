@@ -174,3 +174,33 @@ def save_model_bundle(model_bundle: dict) -> Path:
 def load_model_bundle(version: int) -> dict:
     """Recharge un bundle sauvegardé."""
     return joblib.load(model_file_path(version))
+
+
+def train_new_model_version(version: int, csv_path: Path = DATASET_PATH) -> dict:
+    """Enchaîne toutes les briques, comme le notebook (utilisé par POST /api/ml/trainings) :
+    découpage 60/20/20, entraînement des 3 modèles, choix et intervalle sur la validation,
+    mesure finale sur le test, sauvegarde. Retourne le bundle sauvegardé."""
+    data_splits = split_train_validation_test(load_feature_table(csv_path))
+    train_features, train_prices = data_splits["train"]
+    validation_features, validation_prices = data_splits["validation"]
+    test_features, test_prices = data_splits["test"]
+
+    trained_pipelines = {name: train_model(name, train_features, train_prices) for name in CANDIDATE_MODELS}
+    validation_mae_by_model = {
+        name: evaluate_model(pipeline, validation_features, validation_prices)["mae"]
+        for name, pipeline in trained_pipelines.items()}
+    best_model_name = min(validation_mae_by_model, key=validation_mae_by_model.get)
+    best_pipeline = trained_pipelines[best_model_name]
+
+    interval_ratios = compute_interval_ratios(best_pipeline, validation_features, validation_prices)
+    test_metrics = evaluate_model(best_pipeline, test_features, test_prices)
+    test_metrics["interval_coverage"] = measure_interval_coverage(
+        best_pipeline, interval_ratios, test_features, test_prices)
+    test_metrics["validation_mae"] = validation_mae_by_model[best_model_name]
+
+    model_bundle = create_model_bundle(
+        model_name=best_model_name, version=version, pipeline=best_pipeline, metrics=test_metrics,
+        interval_ratios=interval_ratios, occupancy_table=compute_occupancy_table(train_features),
+        training_rows=len(train_features))
+    save_model_bundle(model_bundle)
+    return model_bundle
