@@ -1,9 +1,9 @@
-﻿# Conventions communes — Location de voitures
+# Conventions communes — Location de voitures
 
 ## Équipe
 | Membre | Service | Framework | Port | Base | Nom Eureka |
 | --- | --- | --- | --- | --- | --- |
-| Montassar | user-service | Spring Boot 3.2 | 8101 | MySQL user_db | RENTAL-USER |
+| Montassar | user-service | Spring Boot 3.3.13 | 8101 | MySQL user_db | RENTAL-USER |
 | Yosra | vehicle-service | Next.js | 8102 | MySQL vehicle_db | RENTAL-VEHICLE |
 | Aziz | reservation-service | Laravel 11 | 8103 | MySQL reservation_db | RENTAL-RESERVATION |
 | Fadi | payment-service | Django REST | 8104 | PostgreSQL payment_db | RENTAL-PAYMENT |
@@ -64,7 +64,19 @@ Une branche `feature/<service>` par membre, fusion dans `main` par pull request 
 ## Adresse annoncée dans Eureka
 Chaque service lancé sur Windows s'annonce sous le nom `host.docker.internal` (variable `SERVICE_HOST=host.docker.internal`), jamais avec une IP détectée automatiquement. Ce nom fonctionne depuis Windows et depuis les conteneurs Docker (Gateway).
 - Spring Boot : `eureka.instance.hostname=host.docker.internal` et `eureka.instance.prefer-ip-address=false`
+- Spring Boot : Spring Boot 3.3.13 avec Spring Cloud 2023.0.4 (3.2.x provoque NoSuchMethodError HttpHeaders.headerSet dans la Gateway)
 - ASP.NET Core (Steeltoe) : `eureka:instance:hostName` = `host.docker.internal`
 - Python (py-eureka-client) : `instance_host="host.docker.internal"`
 - Next.js (eureka-js-client) : `instance.hostName` = `host.docker.internal`, `instance.ipAddr` = `host.docker.internal`
 - PHP (shared/php-eureka) : déjà fait, via `SERVICE_HOST` (par défaut `host.docker.internal`)
+
+## Écoute réseau (obligatoire pour être joint par la Gateway)
+La Gateway (dans Docker) appelle les services via host.docker.internal : chaque service doit écouter sur 0.0.0.0, pas seulement sur 127.0.0.1.
+- Spring Boot : par défaut, rien à faire.
+- Symfony : symfony server:start --port=8106 --no-tls --allow-all-ip
+- Laravel : php artisan serve --host=0.0.0.0 --port=8103
+- Django : python manage.py runserver 0.0.0.0:8104
+- ASP.NET Core : ASPNETCORE_URLS=http://0.0.0.0:8105
+- FastAPI : uvicorn main:app --host 0.0.0.0 --port 8107
+- Next.js : next dev -H 0.0.0.0 -p 8102
+Si le pare-feu Windows demande une autorisation, accepter pour les réseaux privés.

@@ -1,0 +1,24 @@
+# Reconstruits dans l'image
+vendor/
+var/
+public/bundles/
+
+# Configuration locale et secrets : les variables viennent de docker-compose
+.env
+.env.local
+.env.*.local
+
+# Tests et outils de développement
+tests/
+phpunit.dist.xml
+phpunit.xml
+.phpunit.cache/
+scripts/
+
+# Divers
+.git
+.gitignore
+.editorconfig
+Dockerfile
+.dockerignore
+*.md

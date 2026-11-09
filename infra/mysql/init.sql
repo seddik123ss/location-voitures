@@ -10,4 +10,5 @@ GRANT ALL PRIVILEGES ON reservation_db.* TO 'reservation_svc'@'%';
 CREATE DATABASE complaint_db;
 CREATE USER 'complaint_svc'@'%' IDENTIFIED BY 'complaint_pwd';
 GRANT ALL PRIVILEGES ON complaint_db.* TO 'complaint_svc'@'%';
+GRANT ALL PRIVILEGES ON `complaint_db%`.* TO 'complaint_svc'@'%';
 FLUSH PRIVILEGES;
