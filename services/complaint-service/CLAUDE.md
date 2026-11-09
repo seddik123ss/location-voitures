@@ -102,4 +102,14 @@ On Windows, send JSON bodies containing accents from a file (`--data-binary @fil
 
 ## Demo data
 
-Fixtures use the fixed UUIDs from `docs/demo-ids.md`: users client1, client2, agent1, admin1 (Keycloak IDs, password `<name>_pwd`), reservations r-pending, r-confirmed, r-completed, contract c-completed, and complaints rec-1 (client2, r-completed, BILLING, OPEN) and rec-2 (client2, r-completed, VEHICLE, RESOLVED).
+Fixtures use the fixed UUIDs from `docs/demo-ids.md`: users client1, client2, agent1, admin1 (Keycloak IDs, password `<name>_pwd`), reservations r-pending, r-confirmed, r-completed, contract c-completed, and **5 complaints: 3 for client2, 2 for client1**:
+
+| Key (`DemoIds`) | Client | Attached to | Category | Priority | Status |
+| --- | --- | --- | --- | --- | --- |
+| `REC_1` (rec-1 in `docs/demo-ids.md`) | client2 | r-completed | BILLING | MEDIUM | OPEN |
+| `REC_2` (rec-2 in `docs/demo-ids.md`) | client2 | r-completed | VEHICLE | HIGH | RESOLVED |
+| `EXTRA_DAMAGE` | client2 | c-completed (contract) | DAMAGE_DISPUTE | HIGH | OPEN |
+| `EXTRA_SERVICE` | client1 | r-confirmed | SERVICE | LOW | IN_PROGRESS |
+| `EXTRA_BILLING` | client1 | r-pending | BILLING | MEDIUM | REJECTED (by admin1) |
+
+Only rec-1 and rec-2 are shared in `docs/demo-ids.md`; the three `EXTRA_*` complaints exist only in this service. So a CLIENT sees 3 (client2) or 2 (client1) complaints, and AGENT/ADMIN see 5.
