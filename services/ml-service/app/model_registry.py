@@ -5,8 +5,8 @@ from datetime import datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app import model_training, price_predictor
-from app.db_tables import ModelVersion
+from app import model_artifacts, price_predictor
+from app.db_tables import MODEL_VERSION_NUMBER_SEQUENCE, ModelVersion
 from app.error_handlers import ConflictError, NotFoundError
 
 
@@ -41,14 +41,14 @@ def delete_model_version(session: Session, model_id: uuid.UUID) -> None:
     version_number = model_version.version
     session.delete(model_version)
     session.commit()
-    model_training.model_file_path(version_number).unlink(missing_ok=True)
+    model_artifacts.model_file_path(version_number).unlink(missing_ok=True)
     price_predictor.forget_model_bundle(version_number)
 
 
 def activate_model_version(session: Session, model_id: uuid.UUID) -> ModelVersion:
     """Rend cette version active et désactive l'ancienne, dans UNE seule transaction."""
     model_version = get_model_version(session, model_id)
-    if not model_training.model_file_path(model_version.version).exists():
+    if not model_artifacts.model_file_path(model_version.version).exists():
         raise ConflictError(f"Fichier du modèle v{model_version.version} introuvable : activation impossible")
 
     # 1) on désactive l'ancienne d'abord (sinon l'index unique refuserait 2 versions actives)
@@ -61,8 +61,9 @@ def activate_model_version(session: Session, model_id: uuid.UUID) -> ModelVersio
 
 
 def next_version_number(session: Session) -> int:
-    highest_version = session.scalar(select(func.max(ModelVersion.version)))
-    return (highest_version or 0) + 1
+    """Réserve un nouveau numéro de version avec la séquence PostgreSQL (jamais réutilisé).
+    Avec MAX(version) + 1, supprimer la v2 puis réentraîner aurait redonné « v2 »."""
+    return session.scalar(select(MODEL_VERSION_NUMBER_SEQUENCE.next_value()))
 
 
 def register_model_version(session: Session, model_bundle: dict) -> ModelVersion:

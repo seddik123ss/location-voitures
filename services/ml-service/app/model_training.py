@@ -1,12 +1,11 @@
-"""Briques de l'entraînement du modèle de prix (utilisées par le notebook et, plus tard, par l'API).
+"""Briques de l'entraînement du modèle de prix (utilisées par le notebook et par l'API).
 
 Chaque fonction fait UNE chose. L'enchaînement complet est montré dans
-notebooks/price_model_training.ipynb.
+notebooks/price_model_training.ipynb et regroupé dans train_new_model_version().
+La sauvegarde des modèles est dans model_artifacts.py.
 """
-from datetime import datetime, timezone
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -18,13 +17,13 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from xgboost import XGBRegressor
 
+from app.model_artifacts import create_model_bundle, save_model_bundle
 from app.price_features import (
     CATEGORICAL_FEATURES, FEATURE_COLUMNS, NUMERIC_FEATURES, TARGET_COLUMN, features_from_history,
 )
 from app.settings import SERVICE_DIR
 
 DATASET_PATH = SERVICE_DIR / "data" / "synthetic_reservations.csv"
-ARTIFACTS_DIR = SERVICE_DIR / "artifacts"
 RANDOM_SEED = 42
 
 # Les 3 modèles comparés : nom lisible -> fonction qui crée un modèle neuf
@@ -140,40 +139,6 @@ def compute_occupancy_table(train_features: pd.DataFrame) -> dict:
     for (agency_code, season), occupancy_rate in mean_occupancy.items():
         occupancy_table.setdefault(agency_code, {})[season] = float(occupancy_rate)
     return occupancy_table
-
-
-def create_model_bundle(model_name: str, version: int, pipeline: Pipeline, metrics: dict,
-                        interval_ratios: dict, occupancy_table: dict, training_rows: int) -> dict:
-    """Regroupe tout ce dont l'API a besoin pour prédire dans un seul objet."""
-    return {
-        "model_name": model_name,
-        "version": version,
-        "pipeline": pipeline,
-        "metrics": metrics,
-        "interval_ratios": interval_ratios,
-        "occupancy_table": occupancy_table,
-        "feature_columns": FEATURE_COLUMNS,
-        "training_rows": training_rows,
-        "trained_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-
-
-def model_file_path(version: int) -> Path:
-    """Chemin du fichier d'une version : artifacts/price_model_v<N>.joblib"""
-    return ARTIFACTS_DIR / f"price_model_v{version}.joblib"
-
-
-def save_model_bundle(model_bundle: dict) -> Path:
-    """Sauvegarde le bundle avec joblib (compressé) et retourne le chemin du fichier."""
-    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    file_path = model_file_path(model_bundle["version"])
-    joblib.dump(model_bundle, file_path, compress=3)
-    return file_path
-
-
-def load_model_bundle(version: int) -> dict:
-    """Recharge un bundle sauvegardé."""
-    return joblib.load(model_file_path(version))
 
 
 def train_new_model_version(version: int, csv_path: Path = DATASET_PATH) -> dict:

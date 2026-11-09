@@ -5,6 +5,7 @@ Un module = un rôle :
 - rental_catalog.py    : catégories et agences connues (liste provisoire)
 - price_features.py    : calcul des variables du modèle à partir d'une réservation
 - model_training.py    : briques d'entraînement + enchaînement complet (POST /trainings)
+- model_artifacts.py   : sauvegarde et chargement des modèles (artifacts/price_model_v<N>.joblib)
 - database.py          : connexion PostgreSQL (SQLAlchemy)
 - db_tables.py         : tables model_versions et prediction_logs
 - api_schemas.py       : formes JSON d'entrée/sortie (camelCase)

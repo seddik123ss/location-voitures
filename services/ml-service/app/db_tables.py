@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Uuid, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Sequence, String, Uuid, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,6 +11,11 @@ from app.database import Base
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# Compteur PostgreSQL des numéros de version : nextval() ne redonne JAMAIS deux fois le même nombre,
+# même si une version est supprimée ou si un entraînement échoue (le numéro est alors perdu, pas réutilisé).
+MODEL_VERSION_NUMBER_SEQUENCE = Sequence("model_version_number_seq", metadata=Base.metadata)
 
 
 class ModelVersion(Base):

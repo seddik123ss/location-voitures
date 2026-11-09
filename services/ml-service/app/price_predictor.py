@@ -8,7 +8,7 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import model_training
+from app import model_artifacts
 from app.api_schemas import PricePredictionRequest, PricePredictionResponse
 from app.db_tables import ModelVersion, PredictionLog
 from app.error_handlers import BusinessValidationError, NoActiveModelError
@@ -71,9 +71,9 @@ def find_active_model_version(session: Session) -> ModelVersion:
 def get_model_bundle(version: int) -> dict:
     """Bundle de la version demandée, lu sur disque la première fois puis gardé en mémoire."""
     if version not in _loaded_bundles:
-        if not model_training.model_file_path(version).exists():
+        if not model_artifacts.model_file_path(version).exists():
             raise NoActiveModelError(f"Fichier du modèle v{version} introuvable")
-        _loaded_bundles[version] = model_training.load_model_bundle(version)
+        _loaded_bundles[version] = model_artifacts.load_model_bundle(version)
     return _loaded_bundles[version]
 
 
