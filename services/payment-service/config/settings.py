@@ -5,6 +5,7 @@ All environment-specific values come from environment variables (see .env.exampl
 following docs/conventions.md: SERVICE_PORT, DB_URL, EUREKA_URL, KEYCLOAK_*, RABBITMQ_URL.
 """
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -26,6 +27,12 @@ ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "*").split
 
 SERVICE_NAME = "RENTAL-PAYMENT"
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8104"))
+# Name announced in Eureka (docs/conventions.md): reachable from Windows and from containers.
+SERVICE_HOST = os.getenv("SERVICE_HOST", "host.docker.internal")
+
+# `manage.py test`: deterministic configuration, independent of .env and of Docker
+# (dev headers auth, simulated reservation client, logged events, no Eureka).
+TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -112,16 +119,19 @@ REST_FRAMEWORK = {
     "UNAUTHENTICATED_USER": None,
 }
 
-# AUTH_MODE=dev : X-User-Id / X-User-Roles headers (local development only, before Keycloak).
-# AUTH_MODE=jwt : Keycloak JWT (step 3).
-AUTH_MODE = os.getenv("AUTH_MODE", "dev").lower()
-if AUTH_MODE == "dev":
-    REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"] = ["payments.auth.DevHeaderAuthentication"]
-else:
-    raise RuntimeError(f"AUTH_MODE={AUTH_MODE!r} not supported yet (dev only until step 3)")
+# AUTH_MODE=jwt : Keycloak JWT (payments/keycloak.py) - normal mode.
+# AUTH_MODE=dev : X-User-Id / X-User-Roles headers - LOCAL DEVELOPMENT AND TESTS ONLY.
+AUTH_MODE = "dev" if TESTING else os.getenv("AUTH_MODE", "jwt").lower()
+AUTHENTICATION_CLASSES = {
+    "jwt": "payments.keycloak.KeycloakJWTAuthentication",
+    "dev": "payments.auth.DevHeaderAuthentication",
+}
+if AUTH_MODE not in AUTHENTICATION_CLASSES:
+    raise RuntimeError(f"AUTH_MODE={AUTH_MODE!r} invalid (expected: jwt | dev)")
+REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"] = [AUTHENTICATION_CLASSES[AUTH_MODE]]
 
-# "log" (step 2: events only logged) | "rabbitmq" (step 3)
-EVENT_PUBLISHER = os.getenv("EVENT_PUBLISHER", "log")
+# "log" (events only logged) | "rabbitmq"
+EVENT_PUBLISHER = "log" if TESTING else os.getenv("EVENT_PUBLISHER", "log")
 
 LOGGING = {
     "version": 1,
@@ -140,10 +150,9 @@ SPECTACULAR_SETTINGS = {
         "- Erreurs au format commun `{status, error, message, details}` ; JSON camelCase ; montants en TND (3 décimales)."
     ),
     "VERSION": "1.0.0",
-    "SERVERS": [
-        {"url": "http://localhost:8088", "description": "via la Gateway (routes /api)"},
-        {"url": "http://localhost:8104", "description": "accès direct au service (développement, routes /internal)"},
-    ],
+    # No SERVERS here: the live Swagger UI then calls the server that served the page
+    # (same origin, no CORS). The Gateway/direct servers are added only to the shared
+    # contract file, see payments.schema.publish_with_bearer_auth (OPENAPI_FOR_DOCS=1).
     "TAGS": [
         {"name": "Paiements", "description": "Paiements de location, caution, frais et remboursements"},
         {"name": "Factures", "description": "Factures générées automatiquement (lecture seule)"},
@@ -170,10 +179,12 @@ SPECTACULAR_SETTINGS = {
 
 # --- Other services / infrastructure (used in later steps) -------------------
 EUREKA_URL = os.getenv("EUREKA_URL", "http://localhost:8761/eureka")
+EUREKA_ENABLED = env_bool("EUREKA_ENABLED", True) and not TESTING
 KEYCLOAK_ISSUER = os.getenv("KEYCLOAK_ISSUER", "http://localhost:8180/realms/location-voitures")
+KEYCLOAK_JWKS_URL = os.getenv("KEYCLOAK_JWKS_URL", f"{KEYCLOAK_ISSUER}/protocol/openid-connect/certs")
 KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "payment-service")
 KEYCLOAK_CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET", "")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
 
 # Simulated reservation-service client until RENTAL-RESERVATION is available.
-RESERVATION_CLIENT = os.getenv("RESERVATION_CLIENT", "fake")  # "fake" | "http"
+RESERVATION_CLIENT = "fake" if TESTING else os.getenv("RESERVATION_CLIENT", "fake")  # "fake" | "http"

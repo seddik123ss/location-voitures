@@ -1468,11 +1468,6 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-servers:
-- url: http://localhost:8088
-  description: via la Gateway (routes /api)
-- url: http://localhost:8104
-  description: accès direct au service (développement, routes /internal)
 tags:
 - name: Paiements
   description: Paiements de location, caution, frais et remboursements
@@ -1480,5 +1475,10 @@ tags:
   description: Factures générées automatiquement (lecture seule)
 - name: Interne
   description: Routes entre services (rôle INTERNAL)
+servers:
+- url: http://localhost:8088
+  description: via la Gateway (routes /api)
+- url: http://localhost:8104
+  description: accès direct au service (développement, routes /internal)
 security:
 - bearerAuth: []

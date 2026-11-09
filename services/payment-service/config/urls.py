@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import include, path
+from django.views.decorators.cache import never_cache
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from payments.views import health
@@ -8,8 +9,9 @@ urlpatterns = [
     path("health", health, name="health"),
     path("admin/", admin.site.urls),
     # Declared before the router so "openapi.json" is never taken for a payment id.
-    path("api/payments/openapi.json", SpectacularAPIView.as_view(), name="schema"),
-    path("swagger", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger"),
+    # never_cache: the browser always reloads the latest API description.
+    path("api/payments/openapi.json", never_cache(SpectacularAPIView.as_view()), name="schema"),
+    path("swagger", never_cache(SpectacularSwaggerView.as_view(url_name="schema")), name="swagger"),
     path("", include("payments.urls")),
 ]
 

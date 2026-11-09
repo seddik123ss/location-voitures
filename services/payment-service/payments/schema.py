@@ -28,6 +28,10 @@ def publish_with_bearer_auth(result, generator, request, public):
     import os
     if os.getenv("OPENAPI_FOR_DOCS") != "1":
         return result
+    result["servers"] = [
+        {"url": "http://localhost:8088", "description": "via la Gateway (routes /api)"},
+        {"url": "http://localhost:8104", "description": "accès direct au service (développement, routes /internal)"},
+    ]
     components = result.setdefault("components", {})
     components["securitySchemes"] = {"bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}}
     for path_item in result.get("paths", {}).values():
@@ -36,6 +40,15 @@ def publish_with_bearer_auth(result, generator, request, public):
                 operation["security"] = [{"bearerAuth": []}]
     result["security"] = [{"bearerAuth": []}]
     return result
+
+
+class KeycloakJWTAuthenticationScheme(OpenApiAuthenticationExtension):
+    target_class = "payments.keycloak.KeycloakJWTAuthentication"
+    name = "bearerAuth"
+
+    def get_security_definition(self, auto_schema):
+        return {"type": "http", "scheme": "bearer", "bearerFormat": "JWT",
+                "description": "Token Keycloak du realm location-voitures (rôles dans la claim `roles`)."}
 
 
 IDEMPOTENCY_KEY_PARAM = OpenApiParameter(

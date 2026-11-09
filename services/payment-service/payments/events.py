@@ -9,8 +9,8 @@ if the publish raises, the exception propagates, transaction.atomic rolls back t
 payment, and the API answers 503. See README "Transactions et publication".
 
 EVENT_PUBLISHER setting:
-- "log"      (step 2): LoggingEventPublisher, only logs the message.
-- "rabbitmq" (step 3): pika publisher with publisher confirms.
+- "log"      : LoggingEventPublisher, only logs the message (tests, development without RabbitMQ).
+- "rabbitmq" : PikaEventPublisher (payments/rabbitmq.py), publisher confirms.
 """
 import json
 import logging
@@ -80,8 +80,11 @@ def get_event_publisher() -> EventPublisher:
         kind = getattr(settings, "EVENT_PUBLISHER", "log").lower()
         if kind == "log":
             _publisher = LoggingEventPublisher()
+        elif kind == "rabbitmq":
+            from payments.rabbitmq import PikaEventPublisher
+            _publisher = PikaEventPublisher()
         else:
-            raise ValueError(f"EVENT_PUBLISHER inconnu ou pas encore disponible : {kind!r}")
+            raise ValueError(f"EVENT_PUBLISHER inconnu : {kind!r} (attendu : log | rabbitmq)")
     return _publisher
 
 

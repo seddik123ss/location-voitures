@@ -16,8 +16,9 @@ from rest_framework import exceptions as drf_exceptions
 from rest_framework import status as http
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
-from rest_framework.views import exception_handler as drf_exception_handler
-from rest_framework.views import set_rollback
+
+# NB: rest_framework.views is imported inside api_exception_handler, not here: importing it
+# loads DEFAULT_AUTHENTICATION_CLASSES (payments.keycloak), which itself imports this module.
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,9 @@ def flatten_validation_errors(detail, prefix: str = "") -> list[dict]:
 # --- DRF exception handler ---------------------------------------------------
 
 def api_exception_handler(exc, context):
+    from rest_framework.views import exception_handler as drf_exception_handler
+    from rest_framework.views import set_rollback
+
     if isinstance(exc, ApiError):
         set_rollback()  # roll back the request transaction, like DRF does for its exceptions
         return Response(error_body(exc.status_code, exc.message, exc.details), status=exc.status_code)

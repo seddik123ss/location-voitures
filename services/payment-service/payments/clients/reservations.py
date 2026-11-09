@@ -202,5 +202,6 @@ def get_reservation_client() -> ReservationClient:
     if kind == "fake":
         return FakeReservationClient()
     if kind == "http":
-        return HttpReservationClient()
+        from payments.keycloak import service_token
+        return HttpReservationClient(token_provider=service_token)
     raise ValueError(f"RESERVATION_CLIENT inconnu : {kind!r} (attendu : fake | http)")

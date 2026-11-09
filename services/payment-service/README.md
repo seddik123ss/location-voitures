@@ -34,21 +34,34 @@ pip install -r requirements.txt
 copy .env.example .env          # puis compléter les secrets (jamais commité)
 python manage.py migrate
 python manage.py seed_demo      # paiements de démo de docs/demo-ids.md
-python manage.py runserver 8104
+python manage.py runserver 0.0.0.0:8104
 ```
+
+Dans un **second terminal** (même venv), le consommateur RabbitMQ :
+
+```powershell
+python manage.py consume_events   # Ctrl+C pour arrêter
+```
+
+`0.0.0.0` est obligatoire : la Gateway (conteneur Docker) joint le service via `host.docker.internal:8104`,
+adresse annoncée dans Eureka. Au premier lancement, autoriser Python dans le pare-feu Windows (réseaux privés).
+Au démarrage, le journal affiche `Registered in Eureka as RENTAL-PAYMENT (host.docker.internal:8104)` ;
+l'instance est visible sur http://127.0.0.1:8761.
 
 ### Variables d'environnement (`.env`, modèle : `.env.example`)
 
 | Variable | Rôle | Valeur locale |
 | --- | --- | --- |
 | `SERVICE_PORT` | port du service | `8104` |
+| `SERVICE_HOST` | nom annoncé dans Eureka (`docs/conventions.md`) | `host.docker.internal` |
+| `EUREKA_ENABLED` | enregistrement / découverte Eureka | `true` |
 | `DB_URL` | connexion PostgreSQL | `postgres://payment_svc:payment_pwd@localhost:5432/payment_db` |
 | `EUREKA_URL` | annuaire Eureka | `http://localhost:8761/eureka` |
 | `KEYCLOAK_ISSUER` | émetteur des tokens | `http://localhost:8180/realms/location-voitures` |
 | `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | compte de service (appels `/internal`) | `payment-service` / secret du realm |
 | `RABBITMQ_URL` | courtier de messages | `amqp://guest:guest@localhost:5672/%2F` |
-| `AUTH_MODE` | `dev` (en-têtes, local uniquement) ou `jwt` (Keycloak) | `dev` jusqu'à l'étape 3 |
-| `EVENT_PUBLISHER` | `log` (journalisé) ou `rabbitmq` | `log` jusqu'à l'étape 3 |
+| `AUTH_MODE` | `jwt` (Keycloak) ou `dev` (en-têtes `X-User-Id`/`X-User-Roles`, local uniquement) | `jwt` |
+| `EVENT_PUBLISHER` | `rabbitmq` ou `log` (message seulement journalisé : sans RabbitMQ, ou tant que la file `reservation.payment_succeeded` n'existe pas) | `rabbitmq` |
 | `RESERVATION_CLIENT` | `fake` (simulé) ou `http` (Eureka) | `fake` tant que reservation-service n'est pas prêt |
 
 ### Tests
@@ -57,10 +70,14 @@ python manage.py runserver 8104
 python manage.py test payments
 ```
 
-64 tests, sur une vraie base PostgreSQL temporaire (`test_payment_db`, créée puis détruite par Django ;
+89 tests, sur une vraie base PostgreSQL temporaire (`test_payment_db`, créée puis détruite par Django ;
 `payment_svc` doit avoir le droit `CREATEDB`, voir « Dépannage »). Couverture : règles métier et codes HTTP,
 idempotence, rollback quand RabbitMQ est indisponible, concurrence (deux paiements simultanés),
-traduction des erreurs inter-services, traitement des messages officiels de `docs/events/`.
+traduction des erreurs inter-services, traitement des messages officiels de `docs/events/`, validation des
+JWT (tokens signés par une clé RSA de test), token de service, découverte et enregistrement Eureka,
+producteur et consommateur RabbitMQ (pika simulé : propriétés du message, 503, ack/nack/.dlq).
+Pendant `manage.py test`, la configuration est forcée (authentification par en-têtes, client de réservation
+simulé, événements journalisés, Eureka désactivé) : les tests ne dépendent ni du `.env` ni de Docker.
 
 ### Régénérer le contrat OpenAPI partagé
 
@@ -145,6 +162,32 @@ Limite connue : si la base échoue au `COMMIT` juste après une publication réu
 paiement. Le motif « outbox » (table d'événements à publier par un processus séparé) supprimerait ce cas ;
 la publication dans la transaction a été retenue car c'est la règle de l'équipe (`docs/events/README.md`).
 
+### RabbitMQ (pika) : `payments/rabbitmq.py`
+**Producteur** (`PikaEventPublisher`) : exchange par défaut, routing key = `reservation.payment_succeeded`
+(le producteur ne déclare jamais la file) ; JSON `application/json`, **persistant** (`delivery_mode=2`),
+`X-Correlation-Id` dans les en-têtes ; **publisher confirms** + `mandatory=True` : `basic_publish` ne rend la main
+qu'une fois le message accepté par RabbitMQ. RabbitMQ arrêté, message refusé, ou **aucune file pour le recevoir**
+(reservation-service jamais démarré) → `EventPublishError` → **503** et rollback du paiement : aucun paiement n'est
+enregistré sans que son message soit réellement dans la file. Une connexion par thread (pika n'est pas thread-safe),
+reconnexion automatique une fois si elle a été coupée.
+
+**Consommateur** (`python manage.py consume_events`) : déclare `payment.reservation_cancelled` et
+`payment.return_settled` (durables) avec leurs files `<nom>.dlq` (arguments `x-dead-letter-exchange` /
+`x-dead-letter-routing-key`) ; ack manuel, **prefetch 1**.
+
+| Situation | Action | Résultat |
+| --- | --- | --- |
+| traité, ou `eventId` déjà traité | `ack` | message retiré |
+| message inexploitable (JSON invalide, enveloppe incomplète, type ne correspondant pas à la file, données invalides) | `nack` sans remise | → `<nom>.dlq` directement (réessayer ne servirait à rien) |
+| erreur passagère (ex. base indisponible), 1re livraison | `nack` avec remise | une seule nouvelle tentative |
+| même erreur, message déjà relivré (`redelivered`) | `nack` sans remise | → `<nom>.dlq` |
+
+Le consommateur se reconnecte seul si RabbitMQ redémarre (attente progressive jusqu'à 30 s) et ferme les
+connexions PostgreSQL périmées avant chaque message (processus de longue durée).
+
+Tester sans producteur : console http://127.0.0.1:15672 (guest/guest) → Queues → `payment.reservation_cancelled`
+→ Publish message, `content_type` = `application/json`, Delivery mode 2, coller `docs/events/ReservationCancelled.json`.
+
 ### Idempotence côté consommateur (`eventId`)
 Chaque message traité ajoute son `eventId` dans `ProcessedEvent` **dans la même transaction** que les effets
 métier. Un message relivré après validation est ignoré ; un crash avant validation ne laisse aucune trace et le
@@ -166,10 +209,35 @@ et `…000000000502` simulent une panne et une réponse illisible (utile en dém
 Deux paiements simultanés pour la même réservation passent tous deux le contrôle « déjà payé ? ». L'index unique
 partiel PostgreSQL n'en laisse passer qu'un ; le second reçoit 409 (test `test_concurrency.py`).
 
-### Authentification (étape actuelle)
-`AUTH_MODE=dev` : identité lue dans les en-têtes `X-User-Id` et `X-User-Roles` (**développement local
-uniquement**). À l'étape 3 : JWT Keycloak (PyJWT + PyJWKClient), `sub` = utilisateur, claim `roles` = rôles,
-sans modification des vues. Toutes les vues sont fermées par défaut (`IsAuthenticated`) et déclarent leurs rôles.
+### Authentification JWT (Keycloak)
+`payments/keycloak.py`, classe d'authentification DRF `KeycloakJWTAuthentication` (`AUTH_MODE=jwt`) :
+- signature vérifiée avec les clés publiques du realm (JWKS via `PyJWKClient`, en cache, rechargées si `kid` inconnu) ;
+- algorithme **RS256 uniquement** (un token HS256 forgé est refusé) ; émetteur = `KEYCLOAK_ISSUER` ;
+  `exp`, `iat`, `iss`, `sub` obligatoires (tolérance 30 s) ; audience non vérifiée (le realm n'a pas de mapper d'audience) ;
+- utilisateur = `sub` (mêmes UUID que `docs/demo-ids.md`) ; rôles = claim `roles` filtrée sur CLIENT, AGENT, ADMIN, INTERNAL ;
+- token absent, invalide ou expiré → **401** (`WWW-Authenticate: Bearer`) ; rôle insuffisant → **403** ;
+  Keycloak injoignable pendant la récupération des clés → **503**.
+
+Toutes les vues sont fermées par défaut (`IsAuthenticated`) et déclarent leurs rôles ; `/internal/**` exige INTERNAL
+et la Gateway le refuse (`denyAll`). Pour appeler les routes `/internal` des autres services, `ServiceTokenProvider`
+obtient un token de compte de service (`client_credentials`, client `payment-service`, rôle INTERNAL), mis en cache
+jusqu'à 30 s avant expiration.
+
+Swagger UI en mode `jwt` : bouton **Authorize** → coller un token (sans « Bearer »). Obtenir un token de test :
+
+```powershell
+$t = (Invoke-RestMethod -Method Post http://127.0.0.1:8180/realms/location-voitures/protocol/openid-connect/token `
+  -Body @{grant_type="password"; client_id="rental-front"; username="client1"; password="client1_pwd"}).access_token
+$t | Set-Clipboard   # valable 5 minutes
+```
+
+### Eureka
+`payments/eureka.py`, démarré dans `PaymentsConfig.ready()` : enregistrement `RENTAL-PAYMENT` avec
+`hostName` **et** `ipAddr` = `host.docker.internal` (aucune IP détectée automatiquement), port 8104, santé `/health`,
+renouvellement toutes les 10 s, désinscription à l'arrêt. Seul le processus qui sert HTTP s'enregistre
+(`runserver`, processus enfant du rechargement automatique) ; `migrate`, `test`, `shell`, le consommateur RabbitMQ non.
+Si Eureka est arrêté, le service démarre quand même (erreur journalisée). Découverte : `clients/discovery.py`
+choisit une instance UP au hasard ; service absent → 503.
 
 ### Formats communs
 Erreurs `{status, error, message, details[{field, message}]}` pour **toutes** les erreurs (validation, 401, 403,
@@ -187,10 +255,10 @@ Erreurs `{status, error, message, details[{field, message}]}` pour **toutes** le
 | p-confirmed `d76b538e-…` | r-confirmed | client1 | RENTAL | 450.000 | SUCCEEDED (+ facture) |
 | p-completed `918e07dc-…` | r-completed | client2 | RENTAL | 640.000 | SUCCEEDED (+ facture) |
 
-Exemple (mode dev) : client1 paie la location de r-pending (270.000 TND).
+Exemple : client1 paie la location de r-pending (270.000 TND), avec le token `$t` obtenu ci-dessus.
 
 ```powershell
-$h = @{ "X-User-Id"="f4d1bab3-468d-428d-b02c-b44341430bfd"; "X-User-Roles"="CLIENT"; "Idempotency-Key"=[guid]::NewGuid().ToString() }
+$h = @{ Authorization="Bearer $t"; "Idempotency-Key"=[guid]::NewGuid().ToString() }
 $body = '{"reservationId":"01cb68ad-4eec-4bdd-8971-ce35381c59d1","type":"RENTAL","method":"CARD","amount":270.0,"cardToken":"tok_visa"}'
 Invoke-RestMethod -Method Post http://127.0.0.1:8104/api/payments -Headers $h -ContentType "application/json" -Body $body
 ```
@@ -203,6 +271,15 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8104/api/payments -Headers $h -C
   PowerShell administrateur : `Stop-Service postgresql-x64-18` (et `Set-Service postgresql-x64-18 -StartupType Manual`).
 - **Tests : `permission denied to create database`** :
   `docker compose exec postgres psql -U postgres -c "ALTER ROLE payment_svc CREATEDB;"` (depuis `infra/`).
+- **Gateway : aucune réponse, et `NoSuchMethodError: HttpHeaders.headerSet()` dans `docker logs location-voitures-gateway-1`** :
+  incompatibilité de versions dans `infra/api-gateway/pom.xml` (Spring Boot 3.2.5 avec Spring Cloud 2023.0.4) ;
+  à corriger dans le socle. Le service reste testable en direct sur le port 8104.
+- **`host.docker.internal` injoignable depuis Windows** (mais OK depuis les conteneurs) : l'entrée ajoutée par Docker
+  Desktop dans `C:\Windows\System32\drivers\etc\hosts` pointe vers une ancienne adresse IP (changement de réseau) ;
+  redémarrer Docker Desktop la met à jour.
+- **Tous les paiements réussis renvoient 503 « Aucune file 'reservation.payment_succeeded' »** : reservation-service
+  n'a pas encore déclaré sa file. Normal tant qu'il n'a jamais été démarré ; pour travailler en attendant,
+  `EVENT_PUBLISHER=log` dans `.env` puis redémarrer le serveur.
 - **Requêtes lentes (~2 s) vers `localhost` depuis Python** : utiliser `127.0.0.1` (résolution IPv6 puis IPv4 sous Windows).
 - **`Activate.ps1` bloqué** : `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 

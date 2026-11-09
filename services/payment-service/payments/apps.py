@@ -6,5 +6,8 @@ class PaymentsConfig(AppConfig):
     name = "payments"
 
     def ready(self):
-        # Registers the drf-spectacular authentication extension.
+        # Registers the drf-spectacular authentication extensions.
         from . import schema  # noqa: F401
+        # Eureka registration (only for the process serving HTTP, see payments/eureka.py).
+        from . import eureka
+        eureka.start()
