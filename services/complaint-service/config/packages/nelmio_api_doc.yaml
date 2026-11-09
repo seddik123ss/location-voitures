@@ -184,6 +184,24 @@ nelmio_api_doc:
                         application/json:
                             schema: { $ref: '#/components/schemas/Error' }
                             example: { status: 409, error: CONFLICT, message: 'Réclamation clôturée (RESOLVED) : ajout de message impossible' }
+                BadGateway:
+                    description: 'Réponse illisible d''un autre service (JSON invalide, champ manquant, code inattendu, jeton de service refusé).'
+                    content:
+                        application/json:
+                            schema: { $ref: '#/components/schemas/Error' }
+                            example: { status: 502, error: BAD_GATEWAY, message: 'Réponse illisible du service RENTAL-RESERVATION : champ userId manquant ou invalide' }
+                ServiceUnavailable:
+                    description: 'Autre service indisponible : inconnu d''Eureka, aucune instance UP, injoignable, ou Keycloak indisponible pour le jeton de service.'
+                    content:
+                        application/json:
+                            schema: { $ref: '#/components/schemas/Error' }
+                            examples:
+                                eureka:
+                                    summary: 'Service absent d''Eureka'
+                                    value: { status: 503, error: SERVICE_UNAVAILABLE, message: 'Service RENTAL-RESERVATION indisponible : Service inconnu d''Eureka (/apps/RENTAL-RESERVATION)' }
+                                down:
+                                    summary: 'Service inscrit mais arrêté'
+                                    value: { status: 503, error: SERVICE_UNAVAILABLE, message: 'Service RENTAL-RESERVATION injoignable' }
                 UnsupportedMediaType:
                     description: 'Content-Type différent de application/json.'
                     content:

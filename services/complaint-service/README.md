@@ -21,12 +21,44 @@ le serveur doit écouter sur toutes les interfaces, ce que font les deux command
 au premier lancement, **acceptez pour les réseaux privés**.
 
 **Eureka.** Le service s'annonce sous `host.docker.internal:8106` (`SERVICE_HOST`, `SERVICE_PORT`, `EUREKA_URL`), visible sur
-http://localhost:8761. Arrêtez `composer eureka` avec **Ctrl+C** : la commande se retire d'Eureka avant de quitter, et la Gateway
-cesse aussitôt de router vers le service (503). Si le terminal a été fermé sans Ctrl+C, retirez l'instance avec
-`php bin/console app:eureka:deregister` ; sinon l'auto-préservation d'Eureka peut la garder affichée.
+http://localhost:8761. Arrêtez `composer eureka` avec **Ctrl+C** : la commande se retire d'Eureka avant de quitter. Si le terminal
+a été fermé sans Ctrl+C, retirez l'instance avec `php bin/console app:eureka:deregister` ; sinon l'auto-préservation d'Eureka peut
+la garder affichée.
+
+Après l'arrêt du service, la Gateway peut répondre **500 pendant une quinzaine de secondes** avant de répondre **503** : c'est
+normal. Elle garde la liste des instances en cache et tente encore l'ancienne adresse, jusqu'au rafraîchissement depuis Eureka.
+
+`app:eureka:run` n'utilise pas `EurekaRunner` de `shared/php-eureka`, qui boucle sans fin sans moyen de s'arrêter : la commande
+refait la même boucle (enregistrement, battement toutes les 30 s, nouvel enregistrement si Eureka a oublié l'instance) et ajoute
+le retrait sur Ctrl+C / SIGTERM. **À faire plus tard, avec Aziz** (reservation-service utilise aussi le runner partagé) : ajouter
+un arrêt propre à `EurekaRunner`, puis faire revenir cette commande au runner partagé.
 
 Vérification via la Gateway (http://localhost:8088) : `GET /api/complaints` sans token donne 401 (Gateway). Avec un token Keycloak
 **et**, tant que l'étape Sécurité n'est pas faite, les en-têtes `X-Dev-User-Id` / `X-Dev-Roles`, on obtient 200.
+
+## Appels aux autres services
+
+À la création d'une réclamation, le service vérifie que la réservation ou le contrat existe et appartient au client :
+`GET /internal/reservations/{id}` sur RENTAL-RESERVATION, ou `GET /internal/contracts/{id}` sur RENTAL-CONTRACT (docs/internal-api.md).
+
+- L'adresse vient d'Eureka. L'appel porte un **jeton de service** obtenu par client credentials avec le client Keycloak
+  `complaint-service` (rôle INTERNAL). Ce jeton reste en cache jusqu'à 30 s avant son expiration ; après un 401, un nouveau jeton est demandé et l'appel est réessayé une fois.
+- L'en-tête `X-Correlation-Id` reçu est retransmis tel quel. S'il est absent, il est généré. Il est aussi renvoyé dans chaque réponse du service.
+- Erreurs : objet inconnu du service appelé → 404 ; appartenant à un autre client → 403 ; service inconnu d'Eureka, sans instance UP,
+  injoignable, ou Keycloak indisponible → **503** ; réponse illisible (JSON invalide, champ manquant, code inattendu, jeton refusé) → **502**.
+  Le détail réseau (adresse, message du système) est écrit dans le log du service, pas dans la réponse.
+
+Configuration (`.env.local`) :
+
+```
+KEYCLOAK_CLIENT_ID=complaint-service
+KEYCLOAK_CLIENT_SECRET=<champ "secret" du client complaint-service dans infra/keycloak/location-voitures-realm.json>
+LOOKUP_MODE=demo
+```
+
+`LOOKUP_MODE` choisit l'implémentation : `eureka` (par défaut, vrais appels HTTP) ou `demo` (réservations et contrats de
+`docs/demo-ids.md`, sans appel). Gardez `demo` en dev tant que reservation-service et contract-service ne sont pas prêts.
+Les tests utilisent toujours `demo` (`.env.test`).
 
 ## Documentation de l'API
 

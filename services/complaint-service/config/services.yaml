@@ -11,6 +11,11 @@ parameters:
     env(EUREKA_URL): 'http://localhost:8761/eureka'
     env(SERVICE_PORT): '8106'
     env(SERVICE_HOST): 'host.docker.internal'
+    env(KEYCLOAK_ISSUER): 'http://localhost:8180/realms/location-voitures'
+    env(KEYCLOAK_CLIENT_ID): 'complaint-service'
+    env(KEYCLOAK_CLIENT_SECRET): ''
+    # eureka : appels HTTP aux autres services ; demo : données de docs/demo-ids.md (voir App\Integration\LookupFactory).
+    env(LOOKUP_MODE): 'eureka'
 
 services:
     # default configuration for services in *this* file
@@ -33,3 +38,9 @@ services:
             $app: 'RENTAL-COMPLAINT'
             $port: '%env(int:SERVICE_PORT)%'
             $host: '%env(SERVICE_HOST)%'
+
+    # Réservations et contrats : implémentation HTTP (Eureka) ou simulée, selon LOOKUP_MODE.
+    App\Integration\ReservationLookup:
+        factory: ['@App\Integration\LookupFactory', 'reservations']
+    App\Integration\ContractLookup:
+        factory: ['@App\Integration\LookupFactory', 'contracts']

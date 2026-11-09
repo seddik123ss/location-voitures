@@ -90,7 +90,7 @@ paths:
       tags:
         - Réclamations
       summary: 'Créer une réclamation'
-      description: "CLIENT uniquement. Exactement un des deux champs reservationId ou contractId (aucun ou les deux → 422). La réservation ou le contrat doit exister (404) et appartenir à l'appelant (403). Statut initial OPEN, priorité MEDIUM par défaut."
+      description: "CLIENT uniquement. Exactement un des deux champs reservationId ou contractId (aucun ou les deux → 422). La réservation ou le contrat doit exister (404) et appartenir à l'appelant (403) : vérifié par GET /internal/reservations/{id} sur RENTAL-RESERVATION ou GET /internal/contracts/{id} sur RENTAL-CONTRACT (via Eureka, jeton de service, X-Correlation-Id retransmis). Service appelé indisponible → 503, réponse illisible → 502. Statut initial OPEN, priorité MEDIUM par défaut."
       operationId: post_complaint_create
       requestBody:
         required: true
@@ -137,6 +137,10 @@ paths:
                 message: 'Réservation introuvable'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '422':
           description: 'Ni reservationId ni contractId, ou les deux'
           content:
@@ -935,6 +939,35 @@ components:
             status: 409
             error: CONFLICT
             message: 'Réclamation clôturée (RESOLVED) : ajout de message impossible'
+    BadGateway:
+      description: "Réponse illisible d'un autre service (JSON invalide, champ manquant, code inattendu, jeton de service refusé)."
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 502
+            error: BAD_GATEWAY
+            message: 'Réponse illisible du service RENTAL-RESERVATION : champ userId manquant ou invalide'
+    ServiceUnavailable:
+      description: "Autre service indisponible : inconnu d'Eureka, aucune instance UP, injoignable, ou Keycloak indisponible pour le jeton de service."
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            eureka:
+              summary: "Service absent d'Eureka"
+              value:
+                status: 503
+                error: SERVICE_UNAVAILABLE
+                message: "Service RENTAL-RESERVATION indisponible : Service inconnu d'Eureka (/apps/RENTAL-RESERVATION)"
+            down:
+              summary: 'Service inscrit mais arrêté'
+              value:
+                status: 503
+                error: SERVICE_UNAVAILABLE
+                message: 'Service RENTAL-RESERVATION injoignable'
     UnsupportedMediaType:
       description: 'Content-Type différent de application/json.'
       content:

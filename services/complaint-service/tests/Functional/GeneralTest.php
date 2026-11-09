@@ -19,6 +19,7 @@ final class GeneralTest extends ApiTestCase
         self::assertSame('complaint-service', $doc['info']['title']);
         self::assertArrayHasKey('bearerAuth', $doc['components']['securitySchemes']);
         self::assertArrayHasKey('/api/complaints/{id}/priority', $doc['paths']);
+        self::assertSame(['201', '400', '401', '403', '404', '415', '502', '503', '422'], array_map('strval', array_keys($doc['paths']['/api/complaints']['post']['responses'])));
 
         $this->client->request('GET', '/api/doc');
         self::assertResponseIsSuccessful();
@@ -66,6 +67,22 @@ final class GeneralTest extends ApiTestCase
         $this->request('POST', '/api/complaints/' . self::UNKNOWN_ID, self::CLIENT1, []);
 
         $this->assertError(405, 'METHOD_NOT_ALLOWED', 'GET, PUT, DELETE');
+    }
+
+    public function testCorrelationIdIsEchoedAsIs(): void
+    {
+        $this->client->request('GET', '/api/complaints', server: ['HTTP_X_DEV_USER_ID' => self::CLIENT1[0], 'HTTP_X_CORRELATION_ID' => 'demo-42']);
+
+        self::assertResponseIsSuccessful();
+        self::assertResponseHeaderSame('X-Correlation-Id', 'demo-42');
+    }
+
+    public function testCorrelationIdIsGeneratedWhenMissingEvenOnErrors(): void
+    {
+        $this->request('GET', '/api/complaints/' . self::UNKNOWN_ID, self::AGENT1);
+
+        $this->assertError(404, 'NOT_FOUND');
+        self::assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', (string) $this->client->getResponse()->headers->get('X-Correlation-Id'));
     }
 
     public function testDetailsOnlyWhenPresent(): void

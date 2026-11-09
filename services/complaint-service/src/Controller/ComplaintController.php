@@ -95,7 +95,7 @@ final class ComplaintController extends AbstractController
     #[Route('', name: 'complaint_create', methods: ['POST'])]
     #[OA\Post(
         summary: 'Créer une réclamation',
-        description: 'CLIENT uniquement. Exactement un des deux champs reservationId ou contractId (aucun ou les deux → 422). La réservation ou le contrat doit exister (404) et appartenir à l\'appelant (403). Statut initial OPEN, priorité MEDIUM par défaut.',
+        description: 'CLIENT uniquement. Exactement un des deux champs reservationId ou contractId (aucun ou les deux → 422). La réservation ou le contrat doit exister (404) et appartenir à l\'appelant (403) : vérifié par GET /internal/reservations/{id} sur RENTAL-RESERVATION ou GET /internal/contracts/{id} sur RENTAL-CONTRACT (via Eureka, jeton de service, X-Correlation-Id retransmis). Service appelé indisponible → 503, réponse illisible → 502. Statut initial OPEN, priorité MEDIUM par défaut.',
         responses: [
             new OA\Response(
                 response: 201,
@@ -108,6 +108,8 @@ final class ComplaintController extends AbstractController
             new OA\Response(response: 403, description: 'Appelant qui n\'est pas CLIENT, ou réservation / contrat d\'un autre client', content: new OA\JsonContent(ref: '#/components/schemas/Error', example: ['status' => 403, 'error' => 'FORBIDDEN', 'message' => 'Cette réservation appartient à un autre client'])),
             new OA\Response(response: 404, description: 'Réservation ou contrat introuvable', content: new OA\JsonContent(ref: '#/components/schemas/Error', example: ['status' => 404, 'error' => 'NOT_FOUND', 'message' => 'Réservation introuvable'])),
             new OA\Response(response: 415, ref: '#/components/responses/UnsupportedMediaType'),
+            new OA\Response(response: 502, ref: '#/components/responses/BadGateway'),
+            new OA\Response(response: 503, ref: '#/components/responses/ServiceUnavailable'),
             new OA\Response(response: 422, description: 'Ni reservationId ni contractId, ou les deux', content: new OA\JsonContent(ref: '#/components/schemas/Error', example: ['status' => 422, 'error' => 'UNPROCESSABLE_ENTITY', 'message' => 'Indiquer exactement un des deux champs reservationId ou contractId', 'details' => [['field' => 'reservationId', 'message' => 'Aucun des deux n\'est renseigné'], ['field' => 'contractId', 'message' => 'Aucun des deux n\'est renseigné']]])),
         ],
     )]
