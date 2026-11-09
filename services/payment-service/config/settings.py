@@ -11,6 +11,8 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
+from config.guards import check_auth_mode
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load services/payment-service/.env if present (never committed).
@@ -120,18 +122,19 @@ REST_FRAMEWORK = {
 }
 
 # AUTH_MODE=jwt : Keycloak JWT (payments/keycloak.py) - normal mode.
-# AUTH_MODE=dev : X-User-Id / X-User-Roles headers - LOCAL DEVELOPMENT AND TESTS ONLY.
+# AUTH_MODE=dev : X-User-Id / X-User-Roles headers - LOCAL DEVELOPMENT AND TESTS ONLY,
+#                 refused when DJANGO_DEBUG=false (config/guards.py): the service does not start.
 AUTH_MODE = "dev" if TESTING else os.getenv("AUTH_MODE", "jwt").lower()
+check_auth_mode(AUTH_MODE, debug=DEBUG, testing=TESTING)
 AUTHENTICATION_CLASSES = {
     "jwt": "payments.keycloak.KeycloakJWTAuthentication",
     "dev": "payments.auth.DevHeaderAuthentication",
 }
-if AUTH_MODE not in AUTHENTICATION_CLASSES:
-    raise RuntimeError(f"AUTH_MODE={AUTH_MODE!r} invalid (expected: jwt | dev)")
 REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"] = [AUTHENTICATION_CLASSES[AUTH_MODE]]
 
-# "log" (events only logged) | "rabbitmq"
-EVENT_PUBLISHER = "log" if TESTING else os.getenv("EVENT_PUBLISHER", "log")
+# "log" (default: events only logged) | "rabbitmq" (integration day, once reservation-service
+# has declared its queue reservation.payment_succeeded; before that every payment would get 503).
+EVENT_PUBLISHER = "log" if TESTING else os.getenv("EVENT_PUBLISHER", "log").lower()
 
 LOGGING = {
     "version": 1,

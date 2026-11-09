@@ -1,0 +1,20 @@
+# Environnement virtuel Python (chacun le recrée avec py -3.12 -m venv .venv)
+.venv/
+
+# Configuration locale avec les mots de passe (seul .env.example est commité)
+.env
+
+# Fichiers compilés et caches Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Points de sauvegarde automatiques de Jupyter
+.ipynb_checkpoints/
+
+# Modèles entraînés : seule la version 1 (modèle de démonstration) est commitée,
+# les versions créées par POST /api/ml/trainings restent locales
+artifacts/price_model_v*.joblib
+!artifacts/price_model_v1.joblib

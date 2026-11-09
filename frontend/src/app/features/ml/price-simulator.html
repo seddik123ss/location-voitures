@@ -1,0 +1,94 @@
+<app-ml-nav />
+
+<section class="ml-page">
+  <header class="page-header">
+    <div>
+      <h1>Simulateur de prix</h1>
+      <p class="muted">Prix journalier conseillé par le modèle actif, avec un intervalle à 90 %.</p>
+    </div>
+  </header>
+
+  @if (generalError()) {
+    <p class="alert error" role="alert">{{ generalError() }}</p>
+  }
+
+  <div class="simulator">
+    <form class="price-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label>
+        Catégorie
+        <select formControlName="categoryId" [class.invalid]="fieldError('categoryId')">
+          <option value="" disabled>Choisir une catégorie…</option>
+          @for (category of categories; track category.id) {
+            <option [value]="category.id">{{ category.label }}</option>
+          }
+        </select>
+        <span class="field-error">{{ fieldError('categoryId') }}</span>
+      </label>
+
+      <label>
+        Agence
+        <select formControlName="agencyId" [class.invalid]="fieldError('agencyId')">
+          <option value="" disabled>Choisir une agence…</option>
+          @for (agency of agencies; track agency.id) {
+            <option [value]="agency.id">{{ agency.label }}</option>
+          }
+        </select>
+        <span class="field-error">{{ fieldError('agencyId') }}</span>
+      </label>
+
+      <div class="date-row">
+        <label>
+          Départ
+          <input
+            type="date"
+            formControlName="startDate"
+            [class.invalid]="fieldError('startDate')"
+          />
+          <span class="field-error">{{ fieldError('startDate') }}</span>
+        </label>
+        <label>
+          Retour
+          <input type="date" formControlName="endDate" [class.invalid]="fieldError('endDate')" />
+          <span class="field-error">{{ fieldError('endDate') }}</span>
+        </label>
+      </div>
+
+      <label>
+        Taux d'occupation <small class="muted">(optionnel, entre 0 et 1 — ex. 0.85)</small>
+        <input
+          type="number"
+          step="0.01"
+          formControlName="occupancyRate"
+          placeholder="Estimé automatiquement"
+          [class.invalid]="fieldError('occupancyRate')"
+        />
+        <span class="field-error">{{ fieldError('occupancyRate') }}</span>
+      </label>
+
+      <button type="submit" class="primary" [disabled]="submitting()">
+        {{ submitting() ? 'Calcul…' : 'Calculer le prix conseillé' }}
+      </button>
+    </form>
+
+    <aside class="result" aria-live="polite">
+      @if (prediction(); as result) {
+        <p class="muted">Prix journalier conseillé</p>
+        <p class="price">
+          {{ result.dailyPrice | number: '1.3-3' }} <span>{{ result.currency }} / jour</span>
+        </p>
+        <p>
+          Intervalle : <strong>{{ result.lowerBound | number: '1.3-3' }}</strong> –
+          <strong>{{ result.upperBound | number: '1.3-3' }}</strong> {{ result.currency }}
+        </p>
+        <p class="muted">
+          Soit environ {{ result.dailyPrice * durationDays() | number: '1.3-3' }}
+          {{ result.currency }} pour {{ durationDays() }} jour(s) · modèle v{{
+            result.modelVersion
+          }}
+        </p>
+      } @else {
+        <p class="muted">Remplissez le formulaire pour obtenir un prix conseillé.</p>
+      }
+    </aside>
+  </div>
+</section>
