@@ -41,3 +41,9 @@ export const vehicleFilterSchema = z.object({
   status: z.enum(STATUSES).optional(),
   maxPrice: z.coerce.number().positive().optional(),
 });
+
+export const maintenanceSchema = z.object({
+  type: z.string().trim().min(1).max(100),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date attendue au format YYYY-MM-DD"),
+  cost: z.number().nonnegative(),
+});

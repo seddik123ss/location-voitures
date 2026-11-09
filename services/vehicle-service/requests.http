@@ -68,3 +68,27 @@ DELETE {{base}}/api/vehicles/9f03ab2d-97a5-4c08-a952-dc6e446370d1
 
 ### 19. Supprimer la Dacia créée au test 15 (attendu : 204) — colle son id
 DELETE {{base}}/api/vehicles/d4b67f99-7119-4ef7-ae1f-dc8737173633
+
+### 20. Ajouter une maintenance à v6 (attendu : 201)
+POST {{base}}/api/vehicles/4d23ae40-9d0d-47e0-a5bc-60dc9690242e/maintenances
+Content-Type: application/json
+
+{ "type": "Révision", "date": "2026-11-05", "cost": 180 }
+
+### 21. Liste des maintenances de v6 (attendu : 200, total 1)
+GET {{base}}/api/vehicles/4d23ae40-9d0d-47e0-a5bc-60dc9690242e/maintenances
+
+### 22. Date invalide (attendu : 400)
+POST {{base}}/api/vehicles/4d23ae40-9d0d-47e0-a5bc-60dc9690242e/maintenances
+Content-Type: application/json
+
+{ "type": "Vidange", "date": "05/11/2026", "cost": 60 }
+
+### 23. Véhicule inexistant (attendu : 404)
+GET {{base}}/api/vehicles/00000000-0000-4000-8000-000000000000/maintenances
+
+### 24. Modifier la maintenance (attendu : 200) — colle l'id obtenu au test 20
+PUT {{base}}/api/vehicles/4d23ae40-9d0d-47e0-a5bc-60dc9690242e/maintenances/64751951-d1d8-4c29-a50f-d857dee6fe18
+Content-Type: application/json
+
+{ "type": "Révision complète", "date": "2026-11-05", "cost": 220.5 }

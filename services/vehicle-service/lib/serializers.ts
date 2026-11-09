@@ -1,4 +1,4 @@
-import type { Agency, Category, Vehicle } from "@prisma/client";
+import type { Agency, Category, Maintenance, Vehicle } from "@prisma/client";
 
 export const toCategory = (c: Category) => ({
   id: c.id,
@@ -29,4 +29,12 @@ export const toVehicle = (v: Vehicle & { category: Category; agency: Agency }) =
   agencyId: v.agencyId,
   category: toCategory(v.category),
   agency: toAgency(v.agency),
+});
+
+export const toMaintenance = (m: Maintenance) => ({
+  id: m.id,
+  vehicleId: m.vehicleId,
+  type: m.type,
+  date: m.date.toISOString().slice(0, 10),
+  cost: m.cost.toNumber(),
 });
