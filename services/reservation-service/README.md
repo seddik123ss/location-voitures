@@ -92,63 +92,15 @@ Construire à la main, depuis `services/reservation-service` :
 docker build --build-context shared=../../shared -t location-voitures/reservation-service .
 ```
 
-Bloc à ajouter dans `infra/docker-compose.yml` (profil `services`, comme complaint-service), et la ligne
-`RESERVATION_KEYCLOAK_CLIENT_SECRET=` (secret de dev du client `reservation-service`) dans `infra/.env.example` :
+Les trois conteneurs sont déclarés dans `infra/docker-compose.yml` (profil `services`, variables communes `x-reservation-env`) ;
+le secret de dev du client Keycloak est dans `infra/.env` (`RESERVATION_KEYCLOAK_CLIENT_SECRET`, copié de `infra/.env.example`)
+et `RESERVATION_LOOKUP_MODE` choisit `demo` ou `eureka`. Dans `infra/` :
 
-```yaml
-x-reservation-env: &reservation-env
-  DB_CONNECTION: mysql
-  DB_URL: mysql://reservation_svc:reservation_pwd@mysql:3306/reservation_db
-  EUREKA_URL: http://eureka:8761/eureka
-  SERVICE_HOST: host.docker.internal
-  SERVICE_PORT: "8103"
-  # L'émetteur des tokens reste localhost:8180 ; le conteneur joint Keycloak par keycloak:8080.
-  KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
-  KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
-  KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
-  KEYCLOAK_CLIENT_ID: reservation-service
-  KEYCLOAK_CLIENT_SECRET: ${RESERVATION_KEYCLOAK_CLIENT_SECRET:-}
-  RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
-  LOOKUP_MODE: ${RESERVATION_LOOKUP_MODE:-demo}
-
-services:
-  reservation-service:
-    profiles: [services]
-    build:
-      context: ../services/reservation-service
-      additional_contexts:
-        shared: ../shared
-    image: location-voitures/reservation-service
-    ports: ["8103:8103"]
-    environment: *reservation-env
-    depends_on: [mysql, eureka, keycloak, rabbitmq]
-    healthcheck:
-      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8103/health') === false ? 1 : 0);"]
-      interval: 10s
-      timeout: 3s
-      start_period: 20s
-      retries: 3
-  reservation-eureka:
-    profiles: [services]
-    image: location-voitures/reservation-service
-    command: ["php", "artisan", "eureka:run"]
-    environment: *reservation-env
-    depends_on:
-      reservation-service:
-        condition: service_healthy
-    stop_grace_period: 15s
-  reservation-consumer:
-    profiles: [services]
-    image: location-voitures/reservation-service
-    command: ["php", "artisan", "rabbitmq:consume"]
-    environment: *reservation-env
-    depends_on:
-      reservation-service:
-        condition: service_healthy
-    stop_grace_period: 15s
+```
+docker compose --profile services up -d --build reservation-service reservation-eureka reservation-consumer
 ```
 
-Puis, dans `infra/` : `docker compose --profile services up -d --build reservation-service reservation-eureka reservation-consumer`.
+`docker compose up -d` sans profil ne lance que l'infrastructure.
 Arrêter ces conteneurs avant `composer serve` en local : ils utilisent le même port 8103.
 
 ## Endpoints
