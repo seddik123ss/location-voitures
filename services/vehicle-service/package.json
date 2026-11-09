@@ -8,7 +8,8 @@
     "start": "next start -H 0.0.0.0 -p 8102",
     "seed": "prisma db seed",
     "consumer": "tsx --env-file=.env consumer/index.ts",
-    "event": "tsx --env-file=.env consumer/publish.ts"
+    "event": "tsx --env-file=.env consumer/publish.ts",
+    "test": "vitest run"    
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -27,7 +28,8 @@
     "@types/react": "^19.3.0",
     "prisma": "^6.19.3",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
