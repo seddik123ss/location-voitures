@@ -25,4 +25,5 @@ seaborn==0.13.2
 
 # --- Tests ---
 pytest==9.2.0
+PyYAML==6.0.3          # lecture du contrat docs/openapi/ml-service.yaml (test de cohérence)
 httpx==0.28.1

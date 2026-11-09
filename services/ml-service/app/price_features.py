@@ -71,7 +71,7 @@ def features_from_history(raw_reservations: pd.DataFrame) -> pd.DataFrame:
         "category": raw_reservations["categoryId"].map(lambda category_id: CATEGORIES[category_id]["code"]),
         "agency": raw_reservations["agencyId"].map(lambda agency_id: AGENCIES[agency_id]["code"]),
         "season": start_dates.dt.month.map(SEASON_BY_MONTH),
-        "start_weekday": start_dates.dt.weekday,
+        "start_weekday": start_dates.dt.day_of_week,   # 0 = lundi, comme date.weekday()
         "duration_days": (end_dates - start_dates).dt.days,
         "lead_time_days": (start_dates - booked_dates).dt.days,
         "occupancy_rate": raw_reservations["occupancyRate"].astype(float),
