@@ -1,35 +1,974 @@
-﻿openapi: 3.0.3
+# Généré depuis le code (Swashbuckle) : voir services/contract-service/README.md, section « Mettre à jour la doc OpenAPI ».
+openapi: 3.0.1
 info:
   title: contract-service
-  version: 0.1.0
+  description: 'Contrats de location et retours de véhicules (Rania). Montants en TND avec 3 décimales, dates ISO 8601 en UTC, identifiants UUID. Cliquer sur Authorize et coller un token Keycloak (realm location-voitures).'
+  version: 1.0.0
 servers:
   - url: http://localhost:8088
-    description: via la Gateway
-paths: {}
+    description: via la Gateway (routes /api/contracts/** et /api/inspections/**)
+  - url: http://localhost:8105
+    description: "direct (développement ; seule adresse pour /internal/**, jamais exposé par la Gateway)"
+paths:
+  /api/contracts:
+    get:
+      tags:
+        - Contracts
+      summary: Lister les contrats (paginé). Un CLIENT ne voit que ses propres contrats.
+      description: 'Rôles autorisés : CLIENT,AGENT,ADMIN'
+      parameters:
+        - name: page
+          in: query
+          description: 'Numéro de page, à partir de 0.'
+          schema:
+            maximum: 2147483647
+            minimum: 0
+            type: integer
+            format: int32
+            default: 0
+        - name: size
+          in: query
+          description: Taille de page (1 à 100).
+          schema:
+            maximum: 100
+            minimum: 1
+            type: integer
+            format: int32
+            default: 20
+        - name: userId
+          in: query
+          description: Filtrer par client.
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          description: Filtrer par statut (ACTIVE ou CLOSED).
+          schema:
+            enum:
+              - ACTIVE
+              - CLOSED
+            type: string
+      responses:
+        '200':
+          description: Page de contrats.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractDtoPageResponse'
+        '400':
+          description: Paramètres de pagination invalides.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+    post:
+      tags:
+        - Contracts
+      summary: 'Remise des clés : créer le contrat et l''état des lieux de départ.'
+      description: "La réservation doit être CONFIRMED et sa caution payée, sinon 409.\r\nUn seul contrat actif par réservation, sinon 409.\r\n            \r\n    POST /api/contracts\r\n    {\r\n      \"reservationId\": \"33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8\",\r\n      \"mileage\": 28750,\r\n      \"fuelLevel\": 1,\r\n      \"damages\": null,\r\n      \"photos\": []\r\n    }"
+      requestBody:
+        description: Réservation et état des lieux de départ.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContractRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/CreateContractRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/CreateContractRequest'
+      responses:
+        '201':
+          description: Contrat créé (en-tête Location).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractDto'
+        '400':
+          description: Corps invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Réservation introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: 'Réservation non confirmée, caution non payée ou contrat actif existant.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '502':
+          description: Réponse illisible d'un autre service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Service réservation ou paiement indisponible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+  '/api/contracts/{id}':
+    get:
+      tags:
+        - Contracts
+      summary: 'Consulter un contrat, avec ses inspections et ses frais.'
+      description: 'Rôles autorisés : CLIENT,AGENT,ADMIN'
+      parameters:
+        - name: id
+          in: path
+          description: UUID du contrat.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Le contrat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractDto'
+        '404':
+          description: Contrat introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - Contracts
+      summary: Modifier un contrat actif (date de signature).
+      description: 'Rôles autorisés : AGENT,ADMIN'
+      parameters:
+        - name: id
+          in: path
+          description: UUID du contrat.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        description: Nouvelles valeurs.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContractRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContractRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/UpdateContractRequest'
+      responses:
+        '200':
+          description: Contrat modifié.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractDto'
+        '400':
+          description: Corps invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Contrat introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Contrat déjà clôturé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+    delete:
+      tags:
+        - Contracts
+      summary: Supprimer un contrat actif (annulation d'une remise des clés saisie par erreur).
+      description: 'Rôles autorisés : AGENT,ADMIN'
+      parameters:
+        - name: id
+          in: path
+          description: UUID du contrat.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Contrat supprimé.
+        '404':
+          description: Contrat introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: 'Contrat clôturé : suppression impossible.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+  '/api/contracts/{id}/return':
+    post:
+      tags:
+        - Contracts
+      summary: 'Retour du véhicule : état des lieux de retour, calcul des frais et clôture du contrat.'
+      description: "Frais calculés automatiquement :\r\n- LATE : chaque jour entamé après 12:00 UTC le dernier jour, au tarif journalier de la catégorie ;\r\n- FUEL : part du réservoir manquante x 140 TND ;\r\n- MILEAGE : km au-delà de 250 km par jour réservé x 0.200 TND ;\r\n- DAMAGE : montant estimé par l'agent (damageFee).\r\n            \r\n    POST /api/contracts/{id}/return\r\n    {\r\n      \"mileage\": 29400,\r\n      \"fuelLevel\": 0.75,\r\n      \"damages\": null,\r\n      \"damageFee\": 0,\r\n      \"returnedAt\": \"2026-11-25T11:00:00Z\"\r\n    }"
+      parameters:
+        - name: id
+          in: path
+          description: UUID du contrat.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        description: État des lieux de retour.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnVehicleRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/ReturnVehicleRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/ReturnVehicleRequest'
+      responses:
+        '200':
+          description: 'Contrat clôturé, frais et caution à libérer.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnSettlementDto'
+        '400':
+          description: Corps invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: 'Contrat, réservation ou véhicule introuvable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Contrat déjà clôturé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Kilométrage au retour inférieur à celui du départ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '502':
+          description: Réponse illisible d'un autre service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Service réservation ou véhicule indisponible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+  '/api/contracts/{id}/extra-fees':
+    get:
+      tags:
+        - Contracts
+      summary: Lister les frais supplémentaires d'un contrat.
+      description: 'Rôles autorisés : CLIENT,AGENT,ADMIN'
+      parameters:
+        - name: id
+          in: path
+          description: UUID du contrat.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Frais du contrat (vide tant que le véhicule n'est pas rendu).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExtraFeeDto'
+        '404':
+          description: Contrat introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+  /health:
+    get:
+      tags:
+        - Health
+      summary: État du service
+      responses:
+        '200':
+          description: OK
+  /api/inspections:
+    get:
+      tags:
+        - Inspections
+      summary: Lister les états des lieux (paginé).
+      description: 'Rôles autorisés : AGENT,ADMIN'
+      parameters:
+        - name: page
+          in: query
+          description: 'Numéro de page, à partir de 0.'
+          schema:
+            maximum: 2147483647
+            minimum: 0
+            type: integer
+            format: int32
+            default: 0
+        - name: size
+          in: query
+          description: Taille de page (1 à 100).
+          schema:
+            maximum: 100
+            minimum: 1
+            type: integer
+            format: int32
+            default: 20
+        - name: contractId
+          in: query
+          description: Filtrer par contrat.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Page d'états des lieux.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionDtoPageResponse'
+        '400':
+          description: Paramètres de pagination invalides.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+  '/api/inspections/{id}':
+    get:
+      tags:
+        - Inspections
+      summary: Consulter un état des lieux.
+      description: 'Rôles autorisés : AGENT,ADMIN'
+      parameters:
+        - name: id
+          in: path
+          description: UUID de l'inspection.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: L'état des lieux.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionDto'
+        '404':
+          description: Inspection introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - Inspections
+      summary: 'Compléter un état des lieux (dommages, photos) tant que le contrat est actif.'
+      description: 'Rôles autorisés : AGENT,ADMIN'
+      parameters:
+        - name: id
+          in: path
+          description: UUID de l'inspection.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        description: Dommages et photos.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInspectionRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInspectionRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/UpdateInspectionRequest'
+      responses:
+        '200':
+          description: Inspection modifiée.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionDto'
+        '400':
+          description: Corps invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Inspection introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Contrat clôturé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
+  '/internal/contracts/{id}':
+    get:
+      tags:
+        - Internal
+      summary: Contrat vu par un autre service (complaint-service vérifie l'appartenance au client).
+      description: 'Rôles autorisés : INTERNAL'
+      parameters:
+        - name: id
+          in: path
+          description: UUID du contrat.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: '{id, number, reservationId, userId, vehicleId, status, signedAt}'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalContractDto'
+        '404':
+          description: Contrat introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Token absent ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Rôle insuffisant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+        - Bearer: [ ]
 components:
-  securitySchemes:
-    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
-    Error:
+    ApiError:
       type: object
-      required: [status, error, message]
       properties:
-        status: { type: integer, example: 409 }
-        error: { type: string, example: CONFLICT }
-        message: { type: string, example: Ce véhicule est déjà réservé sur ces dates }
+        status:
+          type: integer
+          format: int32
+        error:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
         details:
           type: array
           items:
-            type: object
-            properties:
-              field: { type: string }
-              message: { type: string }
-    Page:
+            $ref: '#/components/schemas/ErrorDetail'
+          nullable: true
+      additionalProperties: false
+      description: Corps de réponse d'erreur commun à tous les services.
+    ContractDto:
       type: object
       properties:
-        items: { type: array, items: {} }
-        page: { type: integer, example: 0 }
-        size: { type: integer, example: 20 }
-        total: { type: integer, example: 57 }
-security:
-  - bearerAuth: []
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          nullable: true
+        reservationId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        signedAt:
+          type: string
+          format: date-time
+        status:
+          enum:
+            - ACTIVE
+            - CLOSED
+          type: string
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        inspections:
+          type: array
+          items:
+            $ref: '#/components/schemas/InspectionDto'
+          nullable: true
+        extraFees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraFeeDto'
+          nullable: true
+        totalExtraFees:
+          type: number
+          format: double
+      additionalProperties: false
+    ContractDtoPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContractDto'
+          nullable: true
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int32
+      additionalProperties: false
+      description: 'Liste paginée : { items, page, size, total } (page commence à 0).'
+    CreateContractRequest:
+      required:
+        - fuelLevel
+        - mileage
+        - reservationId
+      type: object
+      properties:
+        reservationId:
+          type: string
+          description: 'UUID de la réservation (doit être CONFIRMED, caution payée).'
+          format: uuid
+          example: 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8
+        mileage:
+          maximum: 2000000
+          minimum: 0
+          type: integer
+          description: Kilométrage au départ.
+          format: int32
+          example: 28750
+        fuelLevel:
+          maximum: 1
+          minimum: 0
+          type: number
+          description: 'Niveau de carburant au départ, entre 0 (vide) et 1 (plein).'
+          format: double
+          example: 1
+        damages:
+          maxLength: 2000
+          type: string
+          description: Dommages déjà présents au départ (facultatif).
+          nullable: true
+          example: Rayure légère pare-chocs arrière
+        photos:
+          type: array
+          items:
+            type: string
+          description: URL des photos de l'état des lieux (facultatif).
+          nullable: true
+        signedAt:
+          type: string
+          description: 'Instant de signature (UTC). Par défaut : maintenant.'
+          format: date-time
+          nullable: true
+          example: '2026-11-20T09:00:00Z'
+      additionalProperties: false
+      description: 'Remise des clés : crée le contrat et l''état des lieux de départ.'
+    ErrorDetail:
+      type: object
+      properties:
+        field:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ExtraFeeDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        contractId:
+          type: string
+          format: uuid
+        type:
+          enum:
+            - LATE
+            - FUEL
+            - MILEAGE
+            - DAMAGE
+          type: string
+        amount:
+          type: number
+          format: double
+      additionalProperties: false
+    InspectionDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        contractId:
+          type: string
+          format: uuid
+        type:
+          enum:
+            - PICKUP
+            - RETURN
+          type: string
+        mileage:
+          type: integer
+          format: int32
+        fuelLevel:
+          type: number
+          format: double
+        damages:
+          type: string
+          nullable: true
+        photos:
+          type: array
+          items:
+            type: string
+          nullable: true
+        inspectedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    InspectionDtoPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InspectionDto'
+          nullable: true
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int32
+      additionalProperties: false
+      description: 'Liste paginée : { items, page, size, total } (page commence à 0).'
+    InternalContractDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          nullable: true
+        reservationId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        status:
+          enum:
+            - ACTIVE
+            - CLOSED
+          type: string
+        signedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+      description: 'Réponse de GET /internal/contracts/{id} (docs/internal-api.md).'
+    ReturnSettlementDto:
+      type: object
+      properties:
+        contract:
+          $ref: '#/components/schemas/ContractDto'
+        extraFees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraFeeDto'
+          nullable: true
+        totalExtraFees:
+          type: number
+          format: double
+        depositToRelease:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+      additionalProperties: false
+      description: 'Résultat du retour : contrat clôturé, frais et caution à libérer.'
+    ReturnVehicleRequest:
+      required:
+        - fuelLevel
+        - mileage
+      type: object
+      properties:
+        mileage:
+          maximum: 2000000
+          minimum: 0
+          type: integer
+          description: Kilométrage au retour (doit être supérieur ou égal à celui du départ).
+          format: int32
+          example: 29400
+        fuelLevel:
+          maximum: 1
+          minimum: 0
+          type: number
+          description: 'Niveau de carburant au retour, entre 0 et 1.'
+          format: double
+          example: 0.75
+        damages:
+          maxLength: 2000
+          type: string
+          description: Nouveaux dommages constatés (facultatif).
+          nullable: true
+          example: Rétroviseur gauche cassé
+        damageFee:
+          maximum: 1000000
+          minimum: 0
+          type: number
+          description: 'Montant des réparations estimé par l''agent, en TND (0 si aucun dommage).'
+          format: double
+          nullable: true
+          example: 0
+        photos:
+          type: array
+          items:
+            type: string
+          description: URL des photos de l'état des lieux (facultatif).
+          nullable: true
+        returnedAt:
+          type: string
+          description: 'Instant du retour (UTC). Par défaut : maintenant.'
+          format: date-time
+          nullable: true
+          example: '2026-11-25T11:00:00Z'
+      additionalProperties: false
+      description: 'Retour du véhicule : état des lieux de retour, calcul des frais et clôture.'
+    UpdateContractRequest:
+      required:
+        - signedAt
+      type: object
+      properties:
+        signedAt:
+          type: string
+          description: Nouvel instant de signature (UTC).
+          format: date-time
+          example: '2026-11-20T09:30:00Z'
+      additionalProperties: false
+      description: Modification d'un contrat actif.
+    UpdateInspectionRequest:
+      type: object
+      properties:
+        damages:
+          maxLength: 2000
+          type: string
+          description: Description des dommages.
+          nullable: true
+          example: Rayure légère pare-chocs arrière
+        photos:
+          type: array
+          items:
+            type: string
+          description: URL des photos.
+          nullable: true
+      additionalProperties: false
+      description: Modification d'un état des lieux (dommages et photos).
+  securitySchemes:
+    Bearer:
+      type: http
+      description: Token Keycloak (sans le mot Bearer)
+      scheme: bearer
+      bearerFormat: JWT
