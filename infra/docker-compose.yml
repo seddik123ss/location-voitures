@@ -90,6 +90,31 @@ services:
       complaint-service:
         condition: service_healthy
     stop_grace_period: 15s
+
+  # docker compose --profile services up -d --build user-service
+  user-service:
+    profiles: [services]
+    build: ../services/user-service
+    image: location-voitures/user-service
+    ports: ["8101:8101"]
+    environment:
+      SERVICE_PORT: "8101"
+      SERVICE_HOST: host.docker.internal
+      DB_URL: jdbc:mysql://mysql:3306/user_db
+      DB_USERNAME: user_svc
+      DB_PASSWORD: user_pwd
+      EUREKA_URL: http://eureka:8761/eureka
+      # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+      KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
+      KEYCLOAK_CLIENT_ID: user-service
+      KEYCLOAK_CLIENT_SECRET: ${USER_KEYCLOAK_CLIENT_SECRET:-}
+      RESERVATIONS_MOCK: ${USER_RESERVATIONS_MOCK:-true}
+    depends_on: [mysql, eureka, keycloak]
+    # MySQL peut être encore en démarrage au premier lancement : on relance le service s'il échoue.
+    restart: on-failure
+    stop_grace_period: 15s
 volumes:
   mysql-data: {}
   pg-data: {}
