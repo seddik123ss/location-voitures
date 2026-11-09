@@ -1,58 +1,37 @@
 import { prisma } from "@/lib/prisma";
-import { ApiError, handle, parsePagination, parseQuery, readJson } from "@/lib/api";
+import { ApiError, handle, parseId } from "@/lib/api";
 import { notFound } from "@/lib/http";
-import { vehicleFilterSchema, vehicleSchema } from "@/lib/schemas";
-import { toVehicle } from "@/lib/serializers";
+import { requireRoles } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// Règle : catégorie ou agence inexistante -> 404
-export async function ensureRefsExist(categoryId: string, agencyId: string) {
-  const [cat, ag] = await Promise.all([
-    prisma.category.findUnique({ where: { id: categoryId } }),
-    prisma.agency.findUnique({ where: { id: agencyId } }),
-  ]);
-  if (!cat) throw new ApiError(notFound(`Catégorie ${categoryId} introuvable`));
-  if (!ag) throw new ApiError(notFound(`Agence ${agencyId} introuvable`));
-}
+type Ctx = { params: Promise<{ id: string }> };
 
-export const GET = handle(async (req) => {
-  const url = new URL(req.url);
-  const { page, size, skip, take } = parsePagination(url);
-  const f = parseQuery(url, vehicleFilterSchema);
+// Route entre services : token de compte de service avec le rôle INTERNAL
+export const GET = handle<Ctx>(async (req, { params }) => {
+  await requireRoles(req, ["INTERNAL"]);
+  const id = parseId((await params).id);
 
-  const where = {
-    categoryId: f.categoryId,
-    agencyId: f.agencyId,
-    fuel: f.fuel,
-    transmission: f.transmission,
-    status: f.status,
-    ...(f.maxPrice !== undefined && { category: { dailyRate: { lte: f.maxPrice } } }),
-  };
-
-  const [items, total] = await prisma.$transaction([
-    prisma.vehicle.findMany({
-      where,
-      skip,
-      take,
-      orderBy: { brand: "asc" },
-      include: { category: true, agency: true },
-    }),
-    prisma.vehicle.count({ where }),
-  ]);
-
-  return Response.json({ items: items.map(toVehicle), page, size, total });
-});
-
-export const POST = handle(async (req) => {
-  const data = await readJson(req, vehicleSchema);
-  await ensureRefsExist(data.categoryId, data.agencyId);
-  const v = await prisma.vehicle.create({
-    data,
-    include: { category: true, agency: true },
+  const v = await prisma.vehicle.findUnique({
+    where: { id },
+    include: { category: true },
   });
-  return Response.json(toVehicle(v), {
-    status: 201,
-    headers: { Location: `/api/vehicles/${v.id}` },
+  if (!v) throw new ApiError(notFound(`Véhicule ${id} introuvable`));
+
+  // Format exact de docs/internal-api.md
+  return Response.json({
+    id: v.id,
+    plate: v.plate,
+    brand: v.brand,
+    model: v.model,
+    status: v.status,
+    mileage: v.mileage,
+    agencyId: v.agencyId,
+    category: {
+      id: v.category.id,
+      name: v.category.name,
+      dailyRate: v.category.dailyRate.toNumber(),
+      deposit: v.category.deposit.toNumber(),
+    },
   });
 });
