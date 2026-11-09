@@ -163,10 +163,24 @@ src/main/java/com/location/userservice/
 src/main/resources/db/migration/   V1__schema.sql, V2__demo_data.sql
 ```
 
+## Pages Angular (`frontend/src/app/features/users/`)
+
+| Route | Accès | Contenu |
+|---|---|---|
+| `/users` | tous | redirige vers `/users/admin` (ADMIN, AGENT) ou `/users/me` (CLIENT) |
+| `/users/me` | connecté | **Mon profil** : informations (modifiables), permis (ajout, modification, suppression), adresses, historique des réservations. Si le profil n'existe pas encore, formulaire de création pré-rempli depuis Keycloak |
+| `/users/admin` | ADMIN, AGENT | liste filtrée (rôle, nom) et paginée ; ADMIN : créer, modifier, supprimer |
+| `/users/admin/:id` | ADMIN, AGENT | fiche : profil, permis (bouton « Marquer comme vérifié »), adresses, réservations |
+| `/users/admin/new`, `/users/admin/:id/edit` | ADMIN | formulaire de création / modification |
+
+Les erreurs du service (409, 422…) s'affichent sous les champs concernés grâce à `details[].field`.
+Lancer : dans `frontend/`, `npm install` puis `npm start`, ouvrir http://localhost:4200 et se connecter avec `client1` / `client1_pwd` ou `admin1` / `admin1_pwd`.
+Angular 21 demande Node 20.19+, 22.12+ ou 24 (pas Node 26).
+
 ## Usage de l'IA
 
 Ce service a été développé avec l'aide de **Claude Code** (assistant IA d'Anthropic, modèle Claude Opus), utilisé dans VS Code.
 
-- **Ce que l'IA a fait** : installation guidée des outils sous Windows, génération du `pom.xml` (Spring Boot 3.3.13 sur le modèle de `infra/eureka-server`), des migrations, des entités, des services, des contrôleurs, de la documentation Swagger, du client OpenFeign, de la sécurité Keycloak, des tests et de ce README. Elle a aussi lancé les vérifications de bout en bout (MySQL, tokens Keycloak réels, enregistrement Eureka, passage par la Gateway).
+- **Ce que l'IA a fait** : installation guidée des outils sous Windows, génération du `pom.xml` (Spring Boot 3.3.13 sur le modèle de `infra/eureka-server`), des migrations, des entités, des services, des contrôleurs, de la documentation Swagger, du client OpenFeign, de la sécurité Keycloak, des tests, des pages Angular (`features/users`) et de ce README. Elle a aussi lancé les vérifications de bout en bout (MySQL, tokens Keycloak réels, enregistrement Eureka, passage par la Gateway).
 - **Ce que j'ai fourni et vérifié** : le cahier des charges (entités, règles, ports, conventions de l'équipe), la relecture du code, l'exécution des tests et des scénarios dans Swagger.
 - **Choix faits avec l'IA** à partir des documents de l'équipe : `/api/users/me` pour la page « Mon profil » ; un seul permis par utilisateur (puisque `/internal/users/{id}` renvoie un `license` ou `null`) ; la route `PATCH /api/licenses/{id}/verify` pour les agents ; la distinction 400 (champ absent) / 422 (champ au mauvais format) ; les téléphones, adresses et numéros de permis des données de démo.
