@@ -1,14 +1,501 @@
-﻿openapi: 3.0.3
+openapi: 3.0.3
 info:
   title: vehicle-service
-  version: 0.1.0
+  version: 1.0.0
+  description: |
+    Gestion du parc automobile : catégories, agences, véhicules et maintenances.
+    Catalogue (GET catégories, agences, véhicules) public ; création, modification et suppression réservées aux rôles AGENT et ADMIN.
+    Montants en TND (3 décimales), identifiants UUID, JSON en camelCase.
 servers:
   - url: http://localhost:8088
     description: via la Gateway
-paths: {}
+  - url: http://localhost:8102
+    description: accès direct (développement)
+tags:
+  - name: Categories
+  - name: Agencies
+  - name: Vehicles
+  - name: Maintenances
+  - name: Internal
+    description: Routes entre services (non exposées par la Gateway, token avec le rôle INTERNAL)
+  - name: Health
+security:
+  - bearerAuth: []
+
+paths:
+  /api/categories:
+    get:
+      tags: [Categories]
+      summary: Lister les catégories (public)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Liste paginée des catégories
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryPage' }
+    post:
+      tags: [Categories]
+      summary: Créer une catégorie (AGENT, ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryInput' }
+            example: { name: Citadine, dailyRate: 70.000, deposit: 400.000 }
+      responses:
+        '201':
+          description: Catégorie créée
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/categories/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Categories]
+      summary: Détail d'une catégorie (public)
+      security: []
+      responses:
+        '200':
+          description: Catégorie trouvée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Categories]
+      summary: Modifier une catégorie (AGENT, ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryInput' }
+            example: { name: SUV, dailyRate: 170.000, deposit: 1000.000 }
+      responses:
+        '200':
+          description: Catégorie modifiée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Categories]
+      summary: Supprimer une catégorie (AGENT, ADMIN)
+      description: Refusée (409) si des véhicules utilisent encore la catégorie.
+      responses:
+        '204': { description: Catégorie supprimée }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/agencies:
+    get:
+      tags: [Agencies]
+      summary: Lister les agences (public)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Liste paginée des agences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgencyPage' }
+    post:
+      tags: [Agencies]
+      summary: Créer une agence (AGENT, ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgencyInput' }
+            example: { name: Agence Sfax, city: Sfax, address: Route de Tunis }
+      responses:
+        '201':
+          description: Agence créée
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Agency' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/agencies/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Agencies]
+      summary: Détail d'une agence (public)
+      security: []
+      responses:
+        '200':
+          description: Agence trouvée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Agency' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Agencies]
+      summary: Modifier une agence (AGENT, ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgencyInput' }
+            example: { name: Agence Tunis Centre, city: Tunis, address: Avenue Habib Bourguiba }
+      responses:
+        '200':
+          description: Agence modifiée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Agency' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Agencies]
+      summary: Supprimer une agence (AGENT, ADMIN)
+      description: Refusée (409) si des véhicules sont encore rattachés à l'agence.
+      responses:
+        '204': { description: Agence supprimée }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/vehicles:
+    get:
+      tags: [Vehicles]
+      summary: Catalogue des véhicules avec filtres (public)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - { name: categoryId, in: query, schema: { type: string, format: uuid }, description: Filtrer par catégorie }
+        - { name: agencyId, in: query, schema: { type: string, format: uuid }, description: Filtrer par agence }
+        - { name: fuel, in: query, schema: { $ref: '#/components/schemas/Fuel' } }
+        - { name: transmission, in: query, schema: { $ref: '#/components/schemas/Transmission' } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/VehicleStatus' } }
+        - { name: maxPrice, in: query, schema: { type: number, example: 100 }, description: Tarif journalier maximum de la catégorie (TND) }
+      responses:
+        '200':
+          description: Liste paginée des véhicules
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehiclePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [Vehicles]
+      summary: Ajouter un véhicule (AGENT, ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VehicleInput' }
+            example:
+              plate: 200 TU 9999
+              brand: Dacia
+              model: Logan
+              year: 2023
+              fuel: DIESEL
+              transmission: MANUAL
+              seats: 5
+              mileage: 5000
+              categoryId: 94236cd0-16fc-41e0-bfc2-c8b1d2c8b1fc
+              agencyId: eb825ac4-855b-499b-b37a-b4c37bbd6b4e
+      responses:
+        '201':
+          description: Véhicule créé
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Catégorie ou agence inexistante
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { status: 404, error: NOT_FOUND, message: Catégorie 00000000-0000-4000-8000-000000000000 introuvable, details: [] }
+        '409':
+          description: Immatriculation déjà utilisée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { status: 409, error: CONFLICT, message: Valeur déjà utilisée, details: [ { field: vehicles_plate_key, message: doit être unique } ] }
+
+  /api/vehicles/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Vehicles]
+      summary: Détail d'un véhicule (public)
+      security: []
+      responses:
+        '200':
+          description: Véhicule trouvé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Vehicles]
+      summary: Modifier un véhicule (AGENT, ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VehicleInput' }
+      responses:
+        '200':
+          description: Véhicule modifié
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Vehicles]
+      summary: Supprimer un véhicule (AGENT, ADMIN)
+      description: |
+        Refusée (409) si le véhicule est loué (RENTED) ou s'il a une réservation active
+        (vérifiée auprès de reservation-service : GET /internal/reservations/active?vehicleId=).
+      responses:
+        '204': { description: Véhicule supprimé }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Véhicule loué ou réservé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { status: 409, error: CONFLICT, message: Impossible de supprimer un véhicule réservé, details: [ { field: reservationIds, message: 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8 } ] }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/vehicles/{id}/maintenances:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Maintenances]
+      summary: Historique des maintenances d'un véhicule (AGENT, ADMIN)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Liste paginée des maintenances
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenancePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Maintenances]
+      summary: Enregistrer une maintenance (AGENT, ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceInput' }
+            example: { type: Révision, date: '2026-11-05', cost: 180.000 }
+      responses:
+        '201':
+          description: Maintenance créée
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Maintenance' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/vehicles/{id}/maintenances/{maintenanceId}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - { name: maintenanceId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Maintenances]
+      summary: Détail d'une maintenance (AGENT, ADMIN)
+      responses:
+        '200':
+          description: Maintenance trouvée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Maintenance' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Maintenances]
+      summary: Modifier une maintenance (AGENT, ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceInput' }
+            example: { type: Révision complète, date: '2026-11-05', cost: 220.500 }
+      responses:
+        '200':
+          description: Maintenance modifiée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Maintenance' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Maintenances]
+      summary: Supprimer une maintenance (AGENT, ADMIN)
+      responses:
+        '204': { description: Maintenance supprimée }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /internal/vehicles/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Internal]
+      summary: Véhicule et sa catégorie (pour reservation-service et contract-service)
+      description: Appelée via Eureka (RENTAL-VEHICLE), jamais via la Gateway. Token de compte de service avec le rôle INTERNAL.
+      servers:
+        - url: http://localhost:8102
+      responses:
+        '200':
+          description: Véhicule trouvé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternalVehicle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /health:
+    get:
+      tags: [Health]
+      summary: État du service
+      security: []
+      servers:
+        - url: http://localhost:8102
+      responses:
+        '200':
+          description: Service démarré
+          content:
+            application/json:
+              example: { status: UP }
+
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      example: a1154300-bea1-4072-b750-2b00cf1f0bcd
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    Size:
+      name: size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  headers:
+    Location:
+      description: URL de la ressource créée
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Requête invalide (validation)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 400, error: BAD_REQUEST, message: Validation échouée, details: [ { field: dailyRate, message: "Too small: expected number to be >0" } ] }
+    Unauthorized:
+      description: Token absent ou invalide
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 401, error: UNAUTHORIZED, message: Token manquant ou invalide, details: [] }
+    Forbidden:
+      description: Rôle insuffisant
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 403, error: FORBIDDEN, message: Rôle AGENT ou ADMIN requis, details: [] }
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 404, error: NOT_FOUND, message: Véhicule 00000000-0000-4000-8000-000000000000 introuvable, details: [] }
+    Conflict:
+      description: Conflit métier
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 409, error: CONFLICT, message: Ressource encore utilisée par des véhicules, details: [] }
+    BadGateway:
+      description: Réponse illisible de reservation-service
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 502, error: BAD_GATEWAY, message: Réponse illisible de RENTAL-RESERVATION, details: [] }
+    ServiceUnavailable:
+      description: reservation-service arrêté ou absent d'Eureka
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { status: 503, error: SERVICE_UNAVAILABLE, message: RENTAL-RESERVATION indisponible, details: [] }
+
   schemas:
     Error:
       type: object
@@ -16,7 +503,7 @@ components:
       properties:
         status: { type: integer, example: 409 }
         error: { type: string, example: CONFLICT }
-        message: { type: string, example: Ce véhicule est déjà réservé sur ces dates }
+        message: { type: string }
         details:
           type: array
           items:
@@ -24,12 +511,129 @@ components:
             properties:
               field: { type: string }
               message: { type: string }
-    Page:
+
+    Fuel:
+      type: string
+      enum: [GASOLINE, DIESEL, HYBRID, ELECTRIC]
+    Transmission:
+      type: string
+      enum: [MANUAL, AUTOMATIC]
+    VehicleStatus:
+      type: string
+      enum: [AVAILABLE, RENTED, MAINTENANCE, OUT_OF_SERVICE]
+
+    CategoryInput:
+      type: object
+      required: [name, dailyRate, deposit]
+      properties:
+        name: { type: string, maxLength: 100, example: SUV }
+        dailyRate: { type: number, description: Tarif journalier (TND), example: 160.000 }
+        deposit: { type: number, description: Caution (TND), example: 1000.000 }
+    Category:
+      allOf:
+        - type: object
+          properties:
+            id: { type: string, format: uuid, example: a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c }
+        - $ref: '#/components/schemas/CategoryInput'
+
+    AgencyInput:
+      type: object
+      required: [name, city, address]
+      properties:
+        name: { type: string, example: Agence Tunis }
+        city: { type: string, example: Tunis }
+        address: { type: string, example: Avenue Habib Bourguiba }
+    Agency:
+      allOf:
+        - type: object
+          properties:
+            id: { type: string, format: uuid, example: eb825ac4-855b-499b-b37a-b4c37bbd6b4e }
+        - $ref: '#/components/schemas/AgencyInput'
+
+    VehicleInput:
+      type: object
+      required: [plate, brand, model, year, fuel, transmission, seats, mileage, categoryId, agencyId]
+      properties:
+        plate: { type: string, description: Immatriculation (unique), example: 125 TU 4503 }
+        brand: { type: string, example: Kia }
+        model: { type: string, example: Sportage }
+        year: { type: integer, example: 2024 }
+        fuel: { $ref: '#/components/schemas/Fuel' }
+        transmission: { $ref: '#/components/schemas/Transmission' }
+        seats: { type: integer, minimum: 1, maximum: 9, example: 5 }
+        mileage: { type: integer, minimum: 0, example: 42980 }
+        status: { $ref: '#/components/schemas/VehicleStatus' }
+        categoryId: { type: string, format: uuid, example: a6ec349d-0ff0-4cb1-bfb9-453dd8e2ee8c }
+        agencyId: { type: string, format: uuid, example: 1deb1dea-ab54-436d-8ed7-c3322f782c88 }
+    Vehicle:
+      allOf:
+        - type: object
+          properties:
+            id: { type: string, format: uuid, example: a1154300-bea1-4072-b750-2b00cf1f0bcd }
+        - $ref: '#/components/schemas/VehicleInput'
+        - type: object
+          properties:
+            category: { $ref: '#/components/schemas/Category' }
+            agency: { $ref: '#/components/schemas/Agency' }
+
+    InternalVehicle:
       type: object
       properties:
-        items: { type: array, items: {} }
+        id: { type: string, format: uuid, example: a1154300-bea1-4072-b750-2b00cf1f0bcd }
+        plate: { type: string, example: 125 TU 4503 }
+        brand: { type: string, example: Kia }
+        model: { type: string, example: Sportage }
+        status: { $ref: '#/components/schemas/VehicleStatus' }
+        mileage: { type: integer, example: 42980 }
+        agencyId: { type: string, format: uuid, example: 1deb1dea-ab54-436d-8ed7-c3322f782c88 }
+        category:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, example: SUV }
+            dailyRate: { type: number, example: 160 }
+            deposit: { type: number, example: 1000 }
+
+    MaintenanceInput:
+      type: object
+      required: [type, date, cost]
+      properties:
+        type: { type: string, example: Révision }
+        date: { type: string, format: date, example: '2026-11-05' }
+        cost: { type: number, description: Coût (TND), example: 180.000 }
+    Maintenance:
+      allOf:
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            vehicleId: { type: string, format: uuid, example: 4d23ae40-9d0d-47e0-a5bc-60dc9690242e }
+        - $ref: '#/components/schemas/MaintenanceInput'
+
+    CategoryPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Category' } }
         page: { type: integer, example: 0 }
         size: { type: integer, example: 20 }
-        total: { type: integer, example: 57 }
-security:
-  - bearerAuth: []
+        total: { type: integer, example: 3 }
+    AgencyPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Agency' } }
+        page: { type: integer, example: 0 }
+        size: { type: integer, example: 20 }
+        total: { type: integer, example: 2 }
+    VehiclePage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Vehicle' } }
+        page: { type: integer, example: 0 }
+        size: { type: integer, example: 20 }
+        total: { type: integer, example: 6 }
+    MaintenancePage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Maintenance' } }
+        page: { type: integer, example: 0 }
+        size: { type: integer, example: 20 }
+        total: { type: integer, example: 1 }
