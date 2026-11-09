@@ -5,6 +5,8 @@ namespace Tests;
 use App\Security\KeySetProvider;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Testing\TestResponse;
+use App\Events\ReservationEventPublisher;
+use Tests\Support\RecordingEventPublisher;
 use Tests\Support\TestKeySetProvider;
 
 abstract class TestCase extends BaseTestCase
@@ -14,7 +16,12 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
         // Aucune requête vers Keycloak pendant les tests : les tokens sont signés par la clé de test.
         $this->app->singleton(KeySetProvider::class, TestKeySetProvider::class);
+        // Aucun message RabbitMQ : les messages publiés sont gardés dans $this->events.
+        $this->events = new RecordingEventPublisher();
+        $this->app->instance(ReservationEventPublisher::class, $this->events);
     }
+
+    protected RecordingEventPublisher $events;
 
     /** GET avec un en-tête Authorization: Bearer (aucun en-tête si $token est null). */
     protected function getWithToken(string $uri, ?string $token): TestResponse

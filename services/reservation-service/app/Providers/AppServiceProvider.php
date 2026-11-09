@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use App\Eureka\EurekaRegistry;
 use App\Eureka\ServiceRegistry;
-use App\Events\LogReservationEventPublisher;
+use App\Events\AmqpReservationEventPublisher;
 use App\Events\ReservationEventPublisher;
 use App\Integration\Demo\DemoUserLookup;
 use App\Integration\Demo\DemoVehicleLookup;
@@ -29,7 +29,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(KeySetProvider::class, KeycloakJwksProvider::class);
         $this->app->singleton(ServiceRegistry::class, static fn () => EurekaRegistry::fromConfig());
         $this->app->singleton(ServiceTokenProvider::class, KeycloakServiceTokenProvider::class);
-        $this->app->singleton(ReservationEventPublisher::class, LogReservationEventPublisher::class);
+        // RabbitMQ (les tests le remplacent par tests/Support/RecordingEventPublisher).
+        $this->app->singleton(ReservationEventPublisher::class, AmqpReservationEventPublisher::class);
 
         // LOOKUP_MODE=demo (données de docs/demo-ids.md) ou eureka (vrais appels).
         $this->app->bind(UserLookup::class, fn ($app) => $app->make(self::lookupMode() === 'demo' ? DemoUserLookup::class : HttpUserLookup::class));

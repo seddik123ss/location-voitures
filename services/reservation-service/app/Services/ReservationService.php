@@ -150,8 +150,10 @@ final class ReservationService
             $reservation->transitionTo($target, $changedBy, $comment);
 
             match ($target) {
+                // Dans la transaction : si RabbitMQ ne confirme pas, l'annulation est annulée (503).
                 ReservationStatus::CANCELLED => $this->events->reservationCancelled($reservation, Carbon::now(), $comment),
-                ReservationStatus::COMPLETED => $this->events->reservationCompleted($reservation),
+                // Best effort, une fois la transaction validée : un échec de publication n'annule pas la fin de location.
+                ReservationStatus::COMPLETED => DB::afterCommit(fn () => $this->events->reservationCompleted($reservation->fresh())),
                 default => null,
             };
 
