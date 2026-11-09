@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Eureka\EurekaRegistry;
+use App\Eureka\ServiceRegistry;
 use App\Security\KeycloakJwksProvider;
 use App\Security\KeySetProvider;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -13,6 +15,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Les tests remplacent ce fournisseur par une clé de test (tests/Support/TestKeySetProvider).
         $this->app->singleton(KeySetProvider::class, KeycloakJwksProvider::class);
+        $this->app->singleton(ServiceRegistry::class, static fn () => EurekaRegistry::fromConfig());
     }
 
     public function boot(): void
