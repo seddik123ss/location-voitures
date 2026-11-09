@@ -1,0 +1,97 @@
+<app-ml-nav />
+
+<section class="ml-page">
+  <header class="page-header">
+    <div>
+      <h1>Versions du modèle de prix</h1>
+      <p class="muted">
+        Une seule version est active : c'est elle qui calcule les prix conseillés.
+      </p>
+    </div>
+    <button type="button" class="primary" (click)="train()" [disabled]="training()">
+      @if (training()) {
+        Entraînement en cours…
+      } @else {
+        Entraîner une nouvelle version
+      }
+    </button>
+  </header>
+
+  @if (errorText()) {
+    <p class="alert error" role="alert">{{ errorText() }}</p>
+  }
+  @if (successText()) {
+    <p class="alert success" role="status">{{ successText() }}</p>
+  }
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Version</th>
+        <th>Nom</th>
+        <th class="number">MAE (TND)</th>
+        <th class="number">R²</th>
+        <th class="number">Couverture</th>
+        <th>Entraînée le</th>
+        <th>État</th>
+        <th><span class="visually-hidden">Action</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (modelVersion of versions(); track modelVersion.id) {
+        <tr [class.active-row]="modelVersion.active">
+          <td>
+            <strong>v{{ modelVersion.version }}</strong>
+          </td>
+          <td>{{ modelVersion.name }}</td>
+          <td class="number">{{ modelVersion.metrics.mae | number: '1.3-3' }}</td>
+          <td class="number">{{ modelVersion.metrics.r2 | number: '1.3-3' }}</td>
+          <td class="number">{{ modelVersion.metrics.intervalCoverage | percent: '1.1-1' }}</td>
+          <td>{{ modelVersion.trainedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+          <td>
+            @if (modelVersion.active) {
+              <span class="badge badge-active">Active</span>
+            } @else {
+              <span class="badge">Inactive</span>
+            }
+          </td>
+          <td>
+            @if (!modelVersion.active) {
+              <button
+                type="button"
+                (click)="activate(modelVersion)"
+                [disabled]="activatingId() !== null || training()"
+              >
+                {{ activatingId() === modelVersion.id ? 'Activation…' : 'Activer' }}
+              </button>
+            }
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="8" class="muted">
+            {{ loading() ? 'Chargement…' : 'Aucune version enregistrée.' }}
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <nav class="pager" aria-label="Pagination des versions">
+    <button
+      type="button"
+      (click)="loadPage(pageIndex() - 1)"
+      [disabled]="pageIndex() === 0 || loading()"
+    >
+      Précédent
+    </button>
+    <span>Page {{ pageIndex() + 1 }} / {{ pageCount() }} · {{ totalVersions() }} version(s)</span>
+    <button
+      type="button"
+      (click)="loadPage(pageIndex() + 1)"
+      [disabled]="pageIndex() + 1 >= pageCount() || loading()"
+    >
+      Suivant
+    </button>
+  </nav>
+</section>
