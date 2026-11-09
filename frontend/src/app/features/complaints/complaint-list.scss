@@ -1,0 +1,14 @@
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.filters label { min-width: 160px; }
+.filters .grow { flex: 1; min-width: 280px; }
+.actions { display: flex; gap: 8px; }
+
+.table { padding: 0; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+tr:last-child td { border-bottom: none; }
+td a { color: var(--primary); font-weight: 600; text-decoration: none; }
+
+.empty { color: var(--muted); }
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; color: var(--muted); font-size: 14px; }

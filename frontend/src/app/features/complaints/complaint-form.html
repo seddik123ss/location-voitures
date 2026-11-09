@@ -1,0 +1,130 @@
+<a class="back" [routerLink]="isEdit ? ['/complaints', editId] : '/complaints'">← {{ isEdit ? 'Retour à la réclamation' : 'Mes réclamations' }}</a>
+<h1>{{ isEdit ? 'Modifier la réclamation' : 'Nouvelle réclamation' }}</h1>
+<p class="sub">
+  {{ isEdit ? 'Le sujet, la description et la catégorie restent modifiables tant que la réclamation est ouverte.' : 'Décrivez le problème rencontré sur une réservation ou un contrat.' }}
+</p>
+
+@if (loadError()) {
+  <div class="alert">{{ loadError() }}</div>
+  <a class="btn" [routerLink]="isEdit ? ['/complaints', editId] : '/complaints'">Retour</a>
+} @else {
+  <form class="card" [formGroup]="form" (ngSubmit)="submit()">
+    @if (!isEdit) {
+      <fieldset>
+        <legend>Concerne</legend>
+        <div class="toggle">
+          <button type="button" class="btn" [class.primary]="form.controls.target.value === 'reservation'" (click)="setTarget('reservation')">
+            Une réservation
+          </button>
+          <button type="button" class="btn" [class.primary]="form.controls.target.value === 'contract'" (click)="setTarget('contract')">
+            Un contrat
+          </button>
+        </div>
+
+        @if (form.controls.target.value === 'reservation') {
+          @switch (reservationsState()) {
+            @case ('loading') {
+              <p class="hint">Chargement de vos réservations…</p>
+            }
+            @case ('list') {
+              <label>
+                Réservation
+                <select formControlName="reservationId">
+                  <option value="">Choisir une réservation</option>
+                  @for (r of reservations(); track r.id) {
+                    <option [value]="r.id">
+                      @if (r.startDate) {
+                        Du {{ r.startDate | date: 'dd/MM/yyyy' }} au {{ r.endDate | date: 'dd/MM/yyyy' }}
+                      } @else {
+                        {{ r.id }}
+                      }
+                      @if (r.status) {
+                        ({{ r.status }})
+                      }
+                    </option>
+                  }
+                </select>
+              </label>
+            }
+            @default {
+              <label>
+                Identifiant de la réservation (UUID)
+                <input formControlName="reservationId" placeholder="ex. 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8" />
+              </label>
+              <p class="hint">
+                @if (reservationsState() === 'empty') {
+                  Aucune réservation trouvée sur votre compte : saisissez l'identifiant à la main.
+                } @else {
+                  La liste de vos réservations n'est pas encore disponible. Saisissez l'identifiant de la réservation :
+                  il figure sur votre confirmation de réservation et dans la page Réservations.
+                }
+              </p>
+            }
+          }
+        } @else {
+          <label>
+            Identifiant du contrat (UUID)
+            <input formControlName="contractId" placeholder="ex. 6804f1c2-925a-4604-94d4-487853bc1cac" />
+          </label>
+          <p class="hint">L'identifiant figure sur votre contrat de location et dans la page Contrats et retours.</p>
+        }
+        @if (submitted() && targetError()) {
+          <span class="invalid">{{ targetError() }}</span>
+        }
+      </fieldset>
+    }
+
+    <div class="row">
+      <label>
+        Catégorie
+        <select formControlName="category">
+          <option value="">Choisir</option>
+          @for (c of categories; track c) {
+            <option [value]="c">{{ categoryLabels[c] }}</option>
+          }
+        </select>
+        @if (showError('category')) {
+          <span class="invalid">Choisissez une catégorie.</span>
+        }
+      </label>
+      @if (!isEdit) {
+        <label>
+          Priorité
+          <select formControlName="priority">
+            @for (p of priorities; track p) {
+              <option [value]="p">{{ priorityLabels[p] }}</option>
+            }
+          </select>
+        </label>
+      }
+    </div>
+
+    <label>
+      Sujet
+      <input formControlName="subject" maxlength="150" />
+      @if (showError('subject')) {
+        <span class="invalid">Sujet obligatoire, 150 caractères au plus.</span>
+      }
+    </label>
+
+    <label>
+      Description
+      <textarea formControlName="description" rows="6" maxlength="5000"></textarea>
+      <span class="hint">{{ form.controls.description.value.length }} / 5000</span>
+      @if (showError('description')) {
+        <span class="invalid">Description obligatoire, 5000 caractères au plus.</span>
+      }
+    </label>
+
+    @if (error()) {
+      <div class="alert">{{ error() }}</div>
+    }
+
+    <div class="actions">
+      <button class="btn primary" type="submit" [disabled]="saving()">
+        {{ saving() ? 'Envoi…' : isEdit ? 'Enregistrer' : 'Envoyer la réclamation' }}
+      </button>
+      <a class="btn" [routerLink]="isEdit ? ['/complaints', editId] : '/complaints'">Annuler</a>
+    </div>
+  </form>
+}
