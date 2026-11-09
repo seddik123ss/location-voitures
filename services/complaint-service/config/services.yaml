@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
+
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+# See also https://symfony.com/doc/current/service_container/import.html
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
+parameters:
+    # Valeurs par défaut (conventions) si les variables d'environnement sont absentes.
+    env(EUREKA_URL): 'http://localhost:8761/eureka'
+    env(SERVICE_PORT): '8106'
+    env(SERVICE_HOST): 'host.docker.internal'
+    env(KEYCLOAK_ISSUER): 'http://localhost:8180/realms/location-voitures'
+    env(KEYCLOAK_CLIENT_ID): 'complaint-service'
+    env(KEYCLOAK_CLIENT_SECRET): ''
+    # Adresses Keycloak vues depuis le service, si elles diffèrent de l'émetteur (Docker : http://keycloak:8080/...).
+    # Vides : déduites de KEYCLOAK_ISSUER.
+    env(KEYCLOAK_JWKS): ''
+    env(KEYCLOAK_TOKEN_URL): ''
+    # demo (par défaut tant que reservation-service et contract-service n'ont pas leurs routes /internal) :
+    # données de docs/demo-ids.md ; eureka : appels HTTP aux autres services (voir App\Integration\LookupFactory).
+    env(LOOKUP_MODE): 'demo'
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+
+    # Client Eureka partagé (shared/php-eureka) : enregistrement de RENTAL-COMPLAINT et résolution des autres services.
+    Rental\Eureka\EurekaClient:
+        arguments:
+            $eurekaUrl: '%env(EUREKA_URL)%'
+            $app: 'RENTAL-COMPLAINT'
+            $port: '%env(int:SERVICE_PORT)%'
+            $host: '%env(SERVICE_HOST)%'
+
+    # Réservations et contrats : implémentation HTTP (Eureka) ou simulée, selon LOOKUP_MODE.
+    App\Integration\ReservationLookup:
+        factory: ['@App\Integration\LookupFactory', 'reservations']
+    App\Integration\ContractLookup:
+        factory: ['@App\Integration\LookupFactory', 'contracts']
+
+    # Clés de signature des tokens Keycloak (JWKS du realm, en cache).
+    App\Security\Jwt\KeySetProvider: '@App\Security\Jwt\KeycloakJwksProvider'
+
+when@test:
+    services:
+        # Tests : tokens signés par la clé de tests/Fixtures/jwt, sans appel à Keycloak.
+        App\Security\Jwt\KeySetProvider:
+            class: App\Tests\Support\TestKeySetProvider

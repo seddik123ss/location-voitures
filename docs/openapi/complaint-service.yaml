@@ -1,35 +1,1005 @@
-﻿openapi: 3.0.3
+openapi: 3.0.0
 info:
   title: complaint-service
-  version: 0.1.0
+  description: "Réclamations des clients de la plateforme de location de voitures (RENTAL-COMPLAINT, port 8106).\n\n**Rôles** (claim `roles` du token Keycloak, realm `location-voitures`) :\n- `CLIENT` : crée, consulte, modifie (tant que OPEN) et supprime (tant que OPEN) ses propres réclamations, écrit des messages ;\n- `AGENT` : consulte toutes les réclamations, change leur statut et leur priorité, écrit des messages ;\n- `ADMIN` : comme AGENT, et peut supprimer n'importe quelle réclamation.\n\n**Statuts** : OPEN → IN_PROGRESS | REJECTED ; IN_PROGRESS → RESOLVED | REJECTED | OPEN ;\nRESOLVED et REJECTED sont des états finaux (toute transition, tout message, tout changement de priorité → 409).\n\n**Ordre des contrôles** : le corps JSON est validé avant d'entrer dans le contrôleur. Un corps invalide renvoie donc\n**400 même si la réclamation n'existe pas** ; ensuite viennent 404 (réclamation introuvable), 403 (droits), puis 409 / 422 (règles métier).\n\n**Formats** (docs/conventions.md) : UUID v4 en chaîne, JSON en camelCase, instants ISO 8601 UTC,\npagination `?page=0&size=20` → `{items, page, size, total}`, erreurs `{status, error, message, details}`.\n\n**Authentification** : `Authorization: Bearer <access token Keycloak>` (realm location-voitures), bouton Authorize → bearerAuth.\nSignature vérifiée avec les clés du realm, émetteur et expiration contrôlés ; l'appelant est le `sub`, ses rôles\nla claim `roles`. Token absent, invalide ou expiré → 401 ; token sans rôle CLIENT, AGENT ou ADMIN → 403.\n"
+  version: 1.0.0
 servers:
-  - url: http://localhost:8088
-    description: via la Gateway
-paths: {}
+  -
+    url: 'http://localhost:8106'
+    description: 'Accès direct au service (dev, utilisé par Swagger UI)'
+  -
+    url: 'http://localhost:8088'
+    description: 'Via la Gateway'
+paths:
+  /api/complaints:
+    get:
+      tags:
+        - Réclamations
+      summary: 'Lister les réclamations'
+      description: "Liste paginée, plus récentes d'abord. Un CLIENT ne voit que les siennes : le filtre userId est forcé à son identifiant (403 s'il en demande un autre). AGENT et ADMIN voient tout."
+      operationId: get_complaint_list
+      parameters:
+        -
+          name: page
+          in: query
+          description: 'Numéro de page, à partir de 0'
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        -
+          name: size
+          in: query
+          description: 'Taille de page'
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+            minimum: 1
+        -
+          name: userId
+          in: query
+          description: 'Client auteur (AGENT / ADMIN ; un CLIENT ne peut passer que le sien)'
+          schema:
+            type: string
+            format: uuid
+          example: 611f32de-ce7b-4927-b1c4-d113b6479d59
+        -
+          name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - OPEN
+              - IN_PROGRESS
+              - RESOLVED
+              - REJECTED
+        -
+          name: category
+          in: query
+          schema:
+            type: string
+            enum:
+              - BILLING
+              - VEHICLE
+              - SERVICE
+              - DAMAGE_DISPUTE
+        -
+          name: priority
+          in: query
+          schema:
+            type: string
+            enum:
+              - LOW
+              - MEDIUM
+              - HIGH
+      responses:
+        '200':
+          description: 'Page de réclamations'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Réclamations
+      summary: 'Créer une réclamation'
+      description: "CLIENT uniquement. Exactement un des deux champs reservationId ou contractId (aucun ou les deux → 422). La réservation ou le contrat doit exister (404) et appartenir à l'appelant (403) : vérifié par GET /internal/reservations/{id} sur RENTAL-RESERVATION ou GET /internal/contracts/{id} sur RENTAL-CONTRACT (via Eureka, jeton de service, X-Correlation-Id retransmis). Service appelé indisponible → 503, réponse illisible → 502. Statut initial OPEN, priorité MEDIUM par défaut."
+      operationId: post_complaint_create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateComplaintRequest'
+      responses:
+        '201':
+          description: 'Réclamation créée'
+          headers:
+            Location:
+              description: 'URL de la réclamation créée'
+              schema:
+                type: string
+                example: /api/complaints/a7f8819d-fc19-4942-9767-71b4546ff46d
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: "Appelant qui n'est pas CLIENT, ou réservation / contrat d'un autre client"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Cette réservation appartient à un autre client'
+        '404':
+          description: 'Réservation ou contrat introuvable'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 404
+                error: NOT_FOUND
+                message: 'Réservation introuvable'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '422':
+          description: 'Ni reservationId ni contractId, ou les deux'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 422
+                error: UNPROCESSABLE_ENTITY
+                message: 'Indiquer exactement un des deux champs reservationId ou contractId'
+                details:
+                  - { field: reservationId, message: "Aucun des deux n'est renseigné" }
+                  - { field: contractId, message: "Aucun des deux n'est renseigné" }
+  '/api/complaints/{id}':
+    get:
+      tags:
+        - Réclamations
+      summary: "Détail d'une réclamation"
+      description: 'Avec messages, historique des statuts et transitions encore possibles. CLIENT : seulement les siennes (403 sinon).'
+      operationId: get_complaint_show
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'Identifiant de la réclamation'
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+          example: b15d796a-8360-46da-a5e1-f9c580aac77f
+      responses:
+        '200':
+          description: Réclamation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Réclamations
+      summary: 'Modifier une réclamation'
+      description: "Client auteur uniquement, tant que la réclamation est OPEN (409 sinon). Remplace subject, description et category. Le corps est validé avant la recherche de la réclamation : un corps invalide renvoie 400 même si la réclamation n'existe pas."
+      operationId: put_complaint_update
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'Identifiant de la réclamation'
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+          example: b15d796a-8360-46da-a5e1-f9c580aac77f
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateComplaintRequest'
+      responses:
+        '200':
+          description: 'Réclamation modifiée'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 'Pas le client auteur'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Seul le client auteur peut modifier cette réclamation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: "Réclamation qui n'est plus OPEN"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 409
+                error: CONFLICT
+                message: 'Seule une réclamation OPEN peut être modifiée (statut actuel : RESOLVED)'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    delete:
+      tags:
+        - Réclamations
+      summary: 'Supprimer une réclamation'
+      description: 'Client auteur tant que la réclamation est OPEN (409 sinon) ; ADMIN quel que soit le statut. Messages et historique sont supprimés avec elle.'
+      operationId: delete_complaint_delete
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'Identifiant de la réclamation'
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+          example: b15d796a-8360-46da-a5e1-f9c580aac77f
+      responses:
+        '204':
+          description: 'Réclamation supprimée'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 'Ni le client auteur ni un ADMIN'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Seul le client auteur ou un ADMIN peut supprimer cette réclamation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: "Client qui supprime une réclamation qui n'est plus OPEN"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 409
+                error: CONFLICT
+                message: 'Seule une réclamation OPEN peut être supprimée par le client (statut actuel : IN_PROGRESS)'
+  '/api/complaints/{id}/status':
+    patch:
+      tags:
+        - Réclamations
+      summary: 'Changer le statut'
+      description: "AGENT ou ADMIN. Transitions autorisées : OPEN → IN_PROGRESS | REJECTED ; IN_PROGRESS → RESOLVED | REJECTED | OPEN. RESOLVED et REJECTED sont finaux (409). Le changement est ajouté à l'historique avec le commentaire. Le corps est validé avant la recherche de la réclamation : un corps invalide renvoie 400 même si la réclamation n'existe pas."
+      operationId: patch_complaint_change_status
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'Identifiant de la réclamation'
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+          example: b15d796a-8360-46da-a5e1-f9c580aac77f
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: 'Statut changé'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: "Appelant qui n'est ni AGENT ni ADMIN"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Seuls AGENT et ADMIN peuvent changer le statut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 'Transition interdite'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 409
+                error: CONFLICT
+                message: 'Transition de statut interdite : RESOLVED -> OPEN'
+                details:
+                  - { field: status, message: 'Transitions possibles depuis RESOLVED : aucune (état final)' }
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  '/api/complaints/{id}/priority':
+    patch:
+      tags:
+        - Réclamations
+      summary: 'Changer la priorité'
+      description: "AGENT ou ADMIN, refusé (409) si la réclamation est dans un état final (RESOLVED, REJECTED). Met à jour updatedAt ; le changement n'est pas gardé dans l'historique. Le corps est validé avant la recherche de la réclamation : un corps invalide renvoie 400 même si la réclamation n'existe pas."
+      operationId: patch_complaint_change_priority
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'Identifiant de la réclamation'
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+          example: b15d796a-8360-46da-a5e1-f9c580aac77f
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePriorityRequest'
+      responses:
+        '200':
+          description: 'Priorité changée'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: "Appelant qui n'est ni AGENT ni ADMIN"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Seuls AGENT et ADMIN peuvent changer la priorité'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 'Réclamation dans un état final'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 409
+                error: CONFLICT
+                message: 'Réclamation clôturée (RESOLVED) : changement de priorité impossible'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  '/api/complaints/{id}/messages':
+    post:
+      tags:
+        - Réclamations
+      summary: 'Ajouter un message'
+      description: "Client auteur, AGENT ou ADMIN ; refusé (409) si la réclamation est dans un état final. Le rôle de l'auteur est enregistré avec le message. Le corps est validé avant la recherche de la réclamation : un corps invalide renvoie 400 même si la réclamation n'existe pas."
+      operationId: post_complaint_add_message
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'Identifiant de la réclamation'
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+          example: b15d796a-8360-46da-a5e1-f9c580aac77f
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMessageRequest'
+      responses:
+        '201':
+          description: 'Message ajouté'
+          headers:
+            Location:
+              description: 'URL de la réclamation'
+              schema:
+                type: string
+                example: /api/complaints/b15d796a-8360-46da-a5e1-f9c580aac77f
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: "CLIENT qui n'est pas l'auteur"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 403
+                error: FORBIDDEN
+                message: 'Seuls le client auteur, AGENT et ADMIN peuvent écrire sur cette réclamation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /health:
+    get:
+      tags:
+        - Santé
+      summary: 'État du service'
+      description: 'Public, sans authentification.'
+      operationId: get_health
+      responses:
+        '200':
+          description: 'Service démarré'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+      security: []
 components:
-  securitySchemes:
-    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
     Error:
-      type: object
-      required: [status, error, message]
+      description: "Format d'erreur commun (docs/conventions.md)."
+      required:
+        - status
+        - error
+        - message
       properties:
-        status: { type: integer, example: 409 }
-        error: { type: string, example: CONFLICT }
-        message: { type: string, example: Ce véhicule est déjà réservé sur ces dates }
+        status:
+          type: integer
+          example: 409
+        error:
+          type: string
+          example: CONFLICT
+        message:
+          type: string
+          example: 'Transition de statut interdite : RESOLVED -> OPEN'
         details:
+          description: "Présent quand l'erreur porte sur des champs précis."
           type: array
           items:
-            type: object
+            required:
+              - field
+              - message
             properties:
-              field: { type: string }
-              message: { type: string }
-    Page:
+              field:
+                type: string
+                example: status
+              message:
+                type: string
+                example: 'Transitions possibles depuis RESOLVED : aucune (état final)'
+            type: object
       type: object
+    Page:
+      description: 'Liste paginée commune. `page` commence à 0.'
+      required:
+        - items
+        - page
+        - size
+        - total
       properties:
-        items: { type: array, items: {} }
-        page: { type: integer, example: 0 }
-        size: { type: integer, example: 20 }
-        total: { type: integer, example: 57 }
+        items:
+          type: array
+          items: {  }
+        page:
+          type: integer
+          example: 0
+          minimum: 0
+        size:
+          type: integer
+          example: 20
+          maximum: 100
+          minimum: 1
+        total:
+          type: integer
+          example: 3
+          minimum: 0
+      type: object
+    ComplaintSummary:
+      description: 'Réclamation sans messages ni historique (éléments de liste).'
+      required:
+        - id
+        - userId
+        - reservationId
+        - contractId
+        - category
+        - priority
+        - status
+        - subject
+        - description
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: b15d796a-8360-46da-a5e1-f9c580aac77f
+        userId:
+          description: 'Client auteur (sub Keycloak).'
+          type: string
+          format: uuid
+          example: 611f32de-ce7b-4927-b1c4-d113b6479d59
+        reservationId:
+          type: string
+          format: uuid
+          example: 30eeff32-a413-42fb-9845-8ede4b7f98e0
+          nullable: true
+        contractId:
+          type: string
+          format: uuid
+          example: null
+          nullable: true
+        category:
+          type: string
+          example: BILLING
+          enum:
+            - BILLING
+            - VEHICLE
+            - SERVICE
+            - DAMAGE_DISPUTE
+        priority:
+          type: string
+          example: MEDIUM
+          enum:
+            - LOW
+            - MEDIUM
+            - HIGH
+        status:
+          type: string
+          example: OPEN
+          enum:
+            - OPEN
+            - IN_PROGRESS
+            - RESOLVED
+            - REJECTED
+        subject:
+          type: string
+          example: 'Montant facturé supérieur au devis'
+          maxLength: 150
+        description:
+          type: string
+          example: 'La réservation du 1er au 5 octobre était annoncée à 640.000 TND, mais un supplément apparaît sur mon relevé.'
+          maxLength: 5000
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-10-06T09:15:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-10-06T09:20:00Z'
+      type: object
+    ComplaintDetail:
+      description: 'Réclamation complète : transitions encore possibles, messages et historique des statuts.'
+      allOf:
+        -
+          $ref: '#/components/schemas/ComplaintSummary'
+        -
+          required:
+            - allowedTransitions
+            - messages
+            - statusHistory
+          properties:
+            allowedTransitions:
+              description: 'Statuts accessibles depuis le statut actuel (vide pour un état final).'
+              type: array
+              items:
+                type: string
+                enum:
+                  - OPEN
+                  - IN_PROGRESS
+                  - RESOLVED
+                  - REJECTED
+              example:
+                - IN_PROGRESS
+                - REJECTED
+            messages:
+              description: 'Du plus ancien au plus récent.'
+              type: array
+              items:
+                $ref: '#/components/schemas/ComplaintMessage'
+            statusHistory:
+              description: 'Du plus ancien au plus récent ; la première entrée est la création (fromStatus null).'
+              type: array
+              items:
+                $ref: '#/components/schemas/StatusHistoryEntry'
+          type: object
+    ComplaintMessage:
+      required:
+        - id
+        - complaintId
+        - authorId
+        - authorRole
+        - content
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 11ea0e66-28ca-45d1-b4f5-b2af690d8650
+        complaintId:
+          type: string
+          format: uuid
+          example: b15d796a-8360-46da-a5e1-f9c580aac77f
+        authorId:
+          type: string
+          format: uuid
+          example: 11c9b774-201e-4a8c-be43-6b084b52f4c7
+        authorRole:
+          type: string
+          example: AGENT
+          enum:
+            - CLIENT
+            - AGENT
+            - ADMIN
+        content:
+          type: string
+          example: 'Nous avons retrouvé le supplément : frais de péage. Remboursement en cours.'
+          maxLength: 2000
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-11-08T22:08:56Z'
+      type: object
+    StatusHistoryEntry:
+      required:
+        - id
+        - fromStatus
+        - toStatus
+        - changedBy
+        - changedByRole
+        - comment
+        - changedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 8e0b7793-4780-4e29-b9d3-d7260f3378cb
+        fromStatus:
+          type: string
+          example: OPEN
+          nullable: true
+          enum:
+            - OPEN
+            - IN_PROGRESS
+            - RESOLVED
+            - REJECTED
+        toStatus:
+          type: string
+          example: IN_PROGRESS
+          enum:
+            - OPEN
+            - IN_PROGRESS
+            - RESOLVED
+            - REJECTED
+        changedBy:
+          type: string
+          format: uuid
+          example: 11c9b774-201e-4a8c-be43-6b084b52f4c7
+        changedByRole:
+          type: string
+          example: AGENT
+          enum:
+            - CLIENT
+            - AGENT
+            - ADMIN
+        comment:
+          type: string
+          example: 'Vérification auprès de la facturation'
+          nullable: true
+        changedAt:
+          type: string
+          format: date-time
+          example: '2026-11-08T22:08:47Z'
+      type: object
+    ComplaintPage:
+      allOf:
+        -
+          $ref: '#/components/schemas/Page'
+        -
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ComplaintSummary'
+          type: object
+    Health:
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: UP
+      type: object
+    CreateComplaintRequest:
+      description: "Indiquer exactement un des deux champs reservationId ou contractId (aucun ou les deux → 422). La réservation ou le contrat doit appartenir à l'appelant."
+      required:
+        - category
+        - subject
+        - description
+      properties:
+        reservationId:
+          description: 'Réservation concernée (exclusif avec contractId).'
+          type: string
+          format: uuid
+          example: 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8
+          nullable: true
+        contractId:
+          description: 'Contrat concerné (exclusif avec reservationId).'
+          type: string
+          format: uuid
+          example: 6804f1c2-925a-4604-94d4-487853bc1cac
+          nullable: true
+        category:
+          type: string
+          example: VEHICLE
+          enum:
+            - BILLING
+            - VEHICLE
+            - SERVICE
+            - DAMAGE_DISPUTE
+        priority:
+          description: 'MEDIUM si absent.'
+          type: string
+          example: HIGH
+          nullable: true
+          default: MEDIUM
+          enum:
+            - LOW
+            - MEDIUM
+            - HIGH
+        subject:
+          type: string
+          example: 'Siège enfant absent'
+          maxLength: 150
+        description:
+          type: string
+          example: "Le siège enfant réservé n'est pas prévu sur la fiche."
+          maxLength: 5000
+      type: object
+      example:
+        reservationId: 33bcc8dc-bd48-4ff8-b7e8-01d7cac54ad8
+        category: VEHICLE
+        priority: HIGH
+        subject: 'Siège enfant absent'
+        description: "Le siège enfant réservé n'est pas prévu sur la fiche."
+    UpdateComplaintRequest:
+      description: 'Remplace les trois champs modifiables (tous obligatoires).'
+      required:
+        - subject
+        - description
+        - category
+      properties:
+        subject:
+          type: string
+          example: 'Montant facturé supérieur au devis (+45 TND)'
+          maxLength: 150
+        description:
+          type: string
+          example: 'Supplément de 45.000 TND non expliqué.'
+          maxLength: 5000
+        category:
+          type: string
+          example: BILLING
+          enum:
+            - BILLING
+            - VEHICLE
+            - SERVICE
+            - DAMAGE_DISPUTE
+      type: object
+    ChangeStatusRequest:
+      required:
+        - status
+      properties:
+        status:
+          description: 'Nouveau statut, autorisé par la matrice des transitions.'
+          type: string
+          example: IN_PROGRESS
+          enum:
+            - OPEN
+            - IN_PROGRESS
+            - RESOLVED
+            - REJECTED
+        comment:
+          description: "Gardé dans l'historique."
+          type: string
+          example: 'Vérification auprès de la facturation'
+          nullable: true
+          maxLength: 1000
+      type: object
+    ChangePriorityRequest:
+      required:
+        - priority
+      properties:
+        priority:
+          type: string
+          example: HIGH
+          enum:
+            - LOW
+            - MEDIUM
+            - HIGH
+      type: object
+    AddMessageRequest:
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          example: 'Nous avons retrouvé le supplément : frais de péage. Remboursement en cours.'
+          maxLength: 2000
+      type: object
+  responses:
+    BadRequest:
+      description: 'Requête invalide : JSON mal formé, champ manquant ou invalide, paramètre de requête invalide (un détail par champ).'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validation:
+              summary: 'Champs invalides'
+              value:
+                status: 400
+                error: BAD_REQUEST
+                message: 'Requête invalide'
+                details:
+                  - { field: category, message: 'Valeur invalide, valeurs possibles : "BILLING", "VEHICLE", "SERVICE", "DAMAGE_DISPUTE"' }
+                  - { field: description, message: 'Champ obligatoire' }
+            json:
+              summary: 'JSON mal formé ou corps vide'
+              value:
+                status: 400
+                error: BAD_REQUEST
+                message: 'Corps JSON invalide'
+    Unauthorized:
+      description: 'Token absent, invalide (signature, émetteur, format) ou expiré.'
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+            example: 'Bearer error="invalid_token"'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing:
+              summary: 'Sans token'
+              value:
+                status: 401
+                error: UNAUTHORIZED
+                message: 'Authentification requise'
+            expired:
+              summary: 'Token expiré'
+              value:
+                status: 401
+                error: UNAUTHORIZED
+                message: 'Token expiré'
+    Forbidden:
+      description: "Rôle insuffisant ou ressource d'un autre client."
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 403
+            error: FORBIDDEN
+            message: 'Cette réclamation appartient à un autre client'
+    NotFound:
+      description: 'Réclamation introuvable.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 404
+            error: NOT_FOUND
+            message: 'Réclamation introuvable'
+    Conflict:
+      description: 'Action incompatible avec le statut actuel de la réclamation.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 409
+            error: CONFLICT
+            message: 'Réclamation clôturée (RESOLVED) : ajout de message impossible'
+    BadGateway:
+      description: "Réponse illisible d'un autre service (JSON invalide, champ manquant, code inattendu, jeton de service refusé)."
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 502
+            error: BAD_GATEWAY
+            message: 'Réponse illisible du service RENTAL-RESERVATION : champ userId manquant ou invalide'
+    ServiceUnavailable:
+      description: "Autre service indisponible : inconnu d'Eureka, aucune instance UP, injoignable, ou Keycloak indisponible pour le jeton de service."
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            eureka:
+              summary: "Service absent d'Eureka"
+              value:
+                status: 503
+                error: SERVICE_UNAVAILABLE
+                message: "Service RENTAL-RESERVATION indisponible : Service inconnu d'Eureka (/apps/RENTAL-RESERVATION)"
+            down:
+              summary: 'Service inscrit mais arrêté'
+              value:
+                status: 503
+                error: SERVICE_UNAVAILABLE
+                message: 'Service RENTAL-RESERVATION injoignable'
+    UnsupportedMediaType:
+      description: 'Content-Type différent de application/json.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: 415
+            error: UNSUPPORTED_MEDIA_TYPE
+            message: 'Content-Type attendu : application/json'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: 'Access token Keycloak (realm location-voitures), obtenu par exemple avec le client gateway. Les rôles sont lus dans la claim `roles`.'
+      bearerFormat: JWT
+      scheme: bearer
 security:
-  - bearerAuth: []
+  -
+    bearerAuth: []
+tags:
+  -
+    name: Réclamations
+    description: 'Réclamations, statut, priorité et messages'
+  -
+    name: Santé
+    description: Supervision

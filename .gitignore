@@ -7,7 +7,8 @@ dist/
 var/
 __pycache__/
 .venv/
-bin/
+**/bin/Debug/
+**/bin/Release/
 obj/
 target/
 .idea/
