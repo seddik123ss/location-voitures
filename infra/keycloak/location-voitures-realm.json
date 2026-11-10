@@ -27,7 +27,7 @@
   "oauth2DevicePollingInterval" : 5,
   "enabled" : true,
   "sslRequired" : "external",
-  "registrationAllowed" : false,
+  "registrationAllowed" : true,
   "registrationEmailAsUsername" : false,
   "rememberMe" : false,
   "verifyEmail" : false,
@@ -376,7 +376,16 @@
       "gateway" : [ ]
     }
   },
-  "groups" : [ ],
+  "groups" : [ {
+    "id" : "cc263d89-71a9-4e41-88a0-60b8abc71a0e",
+    "name" : "clients",
+    "path" : "/clients",
+    "subGroups" : [ ],
+    "attributes" : { },
+    "realmRoles" : [ "CLIENT" ],
+    "clientRoles" : { }
+  } ],
+  "defaultGroups" : [ "/clients" ],
   "defaultRole" : {
     "id" : "e7dda3b0-e5b5-4775-a0a5-140e794f68c9",
     "name" : "default-roles-location-voitures",
