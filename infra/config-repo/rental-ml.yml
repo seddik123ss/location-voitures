@@ -7,3 +7,6 @@ service:
 ml:
   rabbitmq:
     queue: ml.reservation_completed   # sa file d'echecs : <queue>.dlq
+rabbitmq:
+  consumes: [ml.reservation_completed]
+  publishes: []

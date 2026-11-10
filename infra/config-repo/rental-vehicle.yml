@@ -1,0 +1,7 @@
+# Configuration NON secrete de vehicle-service (lue par GET http://localhost:8888/rental-vehicle/default). Aucun secret : ils restent dans le .env du service.
+service:
+  port: 8102
+  eureka-name: RENTAL-VEHICLE
+rabbitmq:
+  consumes: [vehicle.contract_events]
+  publishes: []

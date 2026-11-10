@@ -1,0 +1,7 @@
+# Configuration NON secrete de user-service (lue par GET http://localhost:8888/rental-user/default). Aucun secret : ils restent dans le .env du service.
+service:
+  port: 8101
+  eureka-name: RENTAL-USER
+rabbitmq:
+  consumes: []
+  publishes: []
