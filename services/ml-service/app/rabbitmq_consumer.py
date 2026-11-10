@@ -17,7 +17,7 @@ from app import completed_reservations
 from app.database import SessionFactory
 from app.settings import settings
 
-QUEUE_NAME = "ml.reservation_completed"
+QUEUE_NAME = settings.rabbitmq_queue                 # ml.reservation_completed (Config Server : ml.rabbitmq.queue)
 DEAD_LETTER_QUEUE_NAME = f"{QUEUE_NAME}.dlq"
 logger = logging.getLogger("ml-service")
 

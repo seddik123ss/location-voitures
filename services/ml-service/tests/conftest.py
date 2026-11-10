@@ -27,6 +27,8 @@ os.environ["DB_URL"] = TEST_DB_URL
 os.environ["EUREKA_ENABLED"] = "false"
 # ... ni ne consomment de messages RabbitMQ (la logique est testée sans RabbitMQ)
 os.environ["RABBITMQ_ENABLED"] = "false"
+# ... et ne lisent pas le Config Server (les tests de test_config_server.py le simulent eux-mêmes)
+os.environ["CONFIG_SERVER_URL"] = ""
 
 import jwt  # noqa: E402  (imports après le réglage de DB_URL, volontairement)
 from alembic import command  # noqa: E402

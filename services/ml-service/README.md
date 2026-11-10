@@ -76,6 +76,18 @@ Détails : `notebooks/price_model_training.ipynb`.
   « Publish message » (`content_type` = `application/json`, delivery mode 2, JSON de `docs/events/ReservationCompleted.json`
   avec un nouvel `eventId`).
 
+## Config Server
+
+Avec `CONFIG_SERVER_URL=http://localhost:8888` dans `.env`, le service lit au démarrage sa configuration **non secrète**
+sur le Config Server de l'équipe (`infra/config-server`, fichiers `infra/config-repo/application.yml` et `rental-ml.yml`) :
+`GET http://localhost:8888/rental-ml/default` → port, nom Eureka, adresses Eureka et Keycloak, nom de la file RabbitMQ.
+
+- **Priorité** : variables d'environnement > `.env` > Config Server > valeurs par défaut. Une valeur présente dans `.env`
+  l'emporte donc toujours ; les **secrets** (`KEYCLOAK_CLIENT_SECRET`, `DB_URL`) ne viennent que du `.env`.
+- **Config Server arrêté** : avertissement `Config Server injoignable`, puis démarrage normal avec le `.env`.
+- Au démarrage, le journal indique la source : `Configuration : Config Server http://localhost:8888/rental-ml/default (6 valeurs) ...`.
+- Tests : `tests/test_config_server.py` (présent, priorité de l'environnement et du `.env`, absent, aucun secret dans `config-repo`).
+
 ## Limites
 
 Données d'entraînement synthétiques, occupation estimée, saison calculée seulement à partir du mois
