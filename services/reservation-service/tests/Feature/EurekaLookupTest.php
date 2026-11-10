@@ -271,6 +271,23 @@ class EurekaLookupTest extends TestCase
             && $r->hasHeader('Authorization', 'Bearer jeton-de-service'));
     }
 
+    public function test_prix_conseille_avec_model_version_entier(): void
+    {
+        // Contrat de ml-service (docs/openapi/ml-service.yaml) : modelVersion est un entier.
+        $this->registry->instances['RENTAL-ML'] = self::ML;
+        $this->fakeServices([self::ML.'/internal/ml/price-predictions' => Http::response(
+            ['dailyPrice' => 149.236, 'lowerBound' => 135.834, 'upperBound' => 162.383, 'currency' => 'TND', 'modelVersion' => 1],
+        )]);
+
+        $response = $this->quote()->assertOk()
+            ->assertJsonPath('totalPrice', 480.0) // le prix facturé reste le prix fixe
+            ->assertJsonPath('suggestedPrice.modelVersion', '1');
+        $this->assertStringContainsString(
+            '"suggestedPrice":{"dailyPrice":149.236,"totalPrice":447.708,"lowerBound":135.834,"upperBound":162.383,"modelVersion":"1"}',
+            $response->getContent(),
+        );
+    }
+
     public function test_ml_indisponible_repli_sur_le_prix_fixe(): void
     {
         // Absent d'Eureka.

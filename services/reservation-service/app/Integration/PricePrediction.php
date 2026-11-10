@@ -20,7 +20,7 @@ final class PricePrediction
             Payload::amount($data, 'dailyPrice'),
             Payload::amount($data, 'lowerBound'),
             Payload::amount($data, 'upperBound'),
-            Payload::string($data, 'modelVersion'),
+            is_int($data['modelVersion'] ?? null) ? (string) $data['modelVersion'] : Payload::string($data, 'modelVersion'),
         );
     }
 }
