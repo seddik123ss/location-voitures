@@ -143,8 +143,27 @@ public class ContractManager
         if (contract.Status == ContractStatus.CLOSED)
             throw ApiException.Conflict("Un contrat clôturé ne peut pas être supprimé");
 
+        // Le véhicule a été marqué RENTED à la remise des clés : la suppression (remise annulée) le libère.
+        // VehicleReturned reprend le kilométrage et le carburant du départ ; dans la transaction, comme au retour.
+        var pickup = contract.Inspections.FirstOrDefault(i => i.Type == InspectionType.PICKUP);
+        var now = _clock.GetUtcNow().UtcDateTime;
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
         _db.Contracts.Remove(contract);
         await _db.SaveChangesAsync(ct);
+        if (pickup is not null)
+        {
+            await _events.PublishAsync(Queues.VehicleContractEvents, "VehicleReturned", new
+            {
+                contractId = contract.Id,
+                reservationId = contract.ReservationId,
+                vehicleId = contract.VehicleId,
+                mileage = pickup.Mileage,
+                fuelLevel = pickup.FuelLevel,
+                returnedAt = now
+            }, now, ct);
+        }
+        await tx.CommitAsync(ct);
     }
 
     /// <summary>Retour du véhicule : état des lieux de retour, calcul des frais, clôture du contrat.</summary>
