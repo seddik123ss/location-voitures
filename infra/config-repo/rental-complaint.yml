@@ -1,0 +1,7 @@
+# Configuration NON secrete de complaint-service (lue par GET http://localhost:8888/rental-complaint/default). Aucun secret : ils restent dans le .env du service.
+service:
+  port: 8106
+  eureka-name: RENTAL-COMPLAINT
+rabbitmq:
+  consumes: []
+  publishes: []

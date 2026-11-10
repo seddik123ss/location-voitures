@@ -1,0 +1,7 @@
+# Configuration NON secrete de reservation-service (lue par GET http://localhost:8888/rental-reservation/default). Aucun secret : ils restent dans le .env du service.
+service:
+  port: 8103
+  eureka-name: RENTAL-RESERVATION
+rabbitmq:
+  consumes: [reservation.payment_succeeded, reservation.contract_closed]
+  publishes: [payment.reservation_cancelled, ml.reservation_completed]

@@ -1,0 +1,7 @@
+# Configuration NON secrete de payment-service (lue par GET http://localhost:8888/rental-payment/default). Aucun secret : ils restent dans le .env du service.
+service:
+  port: 8104
+  eureka-name: RENTAL-PAYMENT
+rabbitmq:
+  consumes: [payment.reservation_cancelled, payment.return_settled]
+  publishes: [reservation.payment_succeeded]

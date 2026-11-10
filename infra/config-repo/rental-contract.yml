@@ -1,0 +1,7 @@
+# Configuration NON secrete de contract-service (lue par GET http://localhost:8888/rental-contract/default). Aucun secret : ils restent dans le .env du service.
+service:
+  port: 8105
+  eureka-name: RENTAL-CONTRACT
+rabbitmq:
+  consumes: []
+  publishes: [vehicle.contract_events, payment.return_settled, reservation.contract_closed]
