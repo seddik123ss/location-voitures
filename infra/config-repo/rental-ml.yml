@@ -1,0 +1,9 @@
+# Configuration NON secrete de ml-service (FastAPI, Feryel), lue au demarrage si CONFIG_SERVER_URL est defini :
+#   GET http://localhost:8888/rental-ml/default
+# Priorite dans ml-service : variables d'environnement > .env > ces valeurs > valeurs par defaut du code.
+service:
+  port: 8107
+  eureka-name: RENTAL-ML
+ml:
+  rabbitmq:
+    queue: ml.reservation_completed   # sa file d'echecs : <queue>.dlq
