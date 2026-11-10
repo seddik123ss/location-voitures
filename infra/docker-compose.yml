@@ -74,6 +74,15 @@ services:
       KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
       KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
     depends_on: [eureka, keycloak]
+  # Config Server : configuration non secrète des services (infra/config-repo), ex. GET http://localhost:8888/rental-ml/default
+  config-server:
+    build: ./config-server
+    ports: ["8888:8888"]
+    environment:
+      EUREKA_URL: http://eureka:8761/eureka
+    volumes:
+      - ./config-repo:/config-repo:ro
+    depends_on: [eureka]
 
   # Services métier : profil "services", donc absents de "docker compose up -d" (infrastructure seule).
   # docker compose --profile services up -d --build complaint-service complaint-eureka

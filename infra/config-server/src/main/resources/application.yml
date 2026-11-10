@@ -1,0 +1,24 @@
+server:
+  port: 8888
+spring:
+  application:
+    name: config-server          # nom Eureka : CONFIG-SERVER
+  profiles:
+    active: native               # lit des fichiers (pas de depot Git distant)
+  cloud:
+    config:
+      server:
+        native:
+          # Dans Docker : infra/config-repo est monte en lecture seule sur /config-repo
+          search-locations: ${CONFIG_REPO:file:/config-repo/}
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true      # comme la Gateway : joint par son adresse dans le reseau Docker
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

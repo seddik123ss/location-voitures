@@ -10,7 +10,7 @@ import py_eureka_client.eureka_client as eureka_client
 
 from app.settings import settings
 
-EUREKA_APP_NAME = "RENTAL-ML"
+EUREKA_APP_NAME = settings.eureka_app_name          # RENTAL-ML (Config Server : service.eureka-name)
 logger = logging.getLogger("ml-service")
 
 
