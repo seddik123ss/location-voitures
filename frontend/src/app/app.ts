@@ -15,6 +15,7 @@ const MENU: MenuItem[] = [
   { label: 'Contrats et retours', path: '/contracts', roles: ['CLIENT', 'AGENT', 'ADMIN'] },
   { label: 'Réclamations', path: '/complaints', roles: ['CLIENT', 'AGENT', 'ADMIN'] },
   { label: 'Utilisateurs', path: '/users', roles: ['CLIENT', 'AGENT', 'ADMIN'] },
+  { label: 'Fidélité', path: '/loyalty', roles: ['CLIENT', 'AGENT', 'ADMIN'] },
   { label: 'Modèles ML', path: '/ml', roles: ['ADMIN'] },
 ];
 

@@ -141,6 +141,32 @@ services:
     restart: on-failure
     stop_grace_period: 15s
 
+  # docker compose --profile services up -d --build loyalty-service
+  # API + consommateur RabbitMQ (loyalty.user_events, loyalty.reservation_completed) dans le même processus.
+  loyalty-service:
+    profiles: [services]
+    build: ../services/loyalty-service
+    image: location-voitures/loyalty-service
+    ports: ["8108:8108"]
+    environment:
+      SERVICE_PORT: "8108"
+      SERVICE_HOST: host.docker.internal
+      DB_URL: jdbc:mysql://mysql:3306/loyalty_db
+      DB_USERNAME: loyalty_svc
+      DB_PASSWORD: loyalty_pwd
+      EUREKA_URL: http://eureka:8761/eureka
+      # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+      KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
+      KEYCLOAK_CLIENT_ID: loyalty-service
+      KEYCLOAK_CLIENT_SECRET: ${LOYALTY_KEYCLOAK_CLIENT_SECRET:-}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    depends_on: [mysql, eureka, keycloak, rabbitmq]
+    # MySQL peut être encore en démarrage au premier lancement : on relance le service s'il échoue.
+    restart: on-failure
+    stop_grace_period: 15s
+
   # docker compose --profile services up -d --build reservation-service reservation-eureka reservation-consumer
   # Une image, trois conteneurs : API (migrations + données de démo si la base est vide), Eureka, consommateur RabbitMQ.
   reservation-service:

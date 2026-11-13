@@ -1,0 +1,1135 @@
+openapi: 3.0.1
+info:
+  title: loyalty-service
+  description: |-
+    Fidélité et codes promo de la plateforme de location de voitures (Eureka : RENTAL-LOYALTY, port 8108).
+    Chaque client a un compte de points (100 points de bienvenue), gagne des points à chaque location
+    terminée, monte de niveau (BRONZE, SILVER, GOLD) et convertit ses points en bons LOY-XXXXXX.
+    L'ADMIN crée des codes promo ; reservation-service les valide et les applique (/internal).
+    Rôles : CLIENT (son compte), AGENT (lecture), ADMIN (codes promo, ajustements),
+    INTERNAL (comptes de service) pour /internal/**.
+  version: 1.0.0
+servers:
+- url: http://localhost:8108
+  description: "direct (développement, Swagger UI)"
+- url: http://localhost:8088
+  description: via la Gateway
+security:
+- bearerAuth: []
+tags:
+- name: Codes promo
+  description: Codes promo de l'ADMIN (lecture AGENT) et aperçu pour le client
+- name: Interne
+  description: "Routes entre services (rôle INTERNAL, hors Gateway)"
+- name: Santé
+  description: État du service
+- name: Fidélité
+  description: "Comptes de points, historique, conversion en bons, ajustements"
+paths:
+  /api/promo-codes/{id}:
+    get:
+      tags:
+      - Codes promo
+      summary: Détail d'un code
+      description: "Avec son compteur d'utilisations. AGENT, ADMIN."
+      operationId: get_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "200":
+          description: Code promo
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags:
+      - Codes promo
+      summary: Modifier un code promo
+      description: active=false pour le désactiver. ADMIN.
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromoCodeUpdateRequest"
+        required: true
+      responses:
+        "200":
+          description: Code modifié
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    delete:
+      tags:
+      - Codes promo
+      summary: Supprimer un code promo
+      description: 204 si jamais utilisé ; sinon 409 (le désactiver). ADMIN.
+      operationId: delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "204":
+          description: Code supprimé
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /internal/promo-codes/validate:
+    post:
+      tags:
+      - Interne
+      summary: "[Interne] Valider un code pour une réservation"
+      description: Ne consomme rien. Vérifie aussi que l'utilisateur est actif dans
+        user-service. INTERNAL.
+      operationId: validate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateRequest"
+        required: true
+      responses:
+        "200":
+          description: "{code, amountBefore, discount, amountAfter}"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DiscountResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /internal/promo-codes/apply:
+    post:
+      tags:
+      - Interne
+      summary: "[Interne] Appliquer un code à une réservation"
+      description: "Revalide puis enregistre l'utilisation (201). Idempotent : mê\
+        me reservationId et même code -> 200 avec la même utilisation ; autre code\
+        \ sur la même réservation -> 409. INTERNAL."
+      operationId: apply
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyRequest"
+        required: true
+      responses:
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "200":
+          description: Déjà appliqué à cette réservation (même utilisation)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "201":
+          description: Utilisation enregistrée
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/promo-codes:
+    get:
+      tags:
+      - Codes promo
+      summary: Lister les codes promo
+      description: "Sans les bons personnels LOY-... ; filtre facultatif active. AGENT,\
+        \ ADMIN."
+      operationId: list
+      parameters:
+      - name: active
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: page
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Page de codes
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponsePromoCodeResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags:
+      - Codes promo
+      summary: Créer un code promo
+      description: "Code déjà existant : 409. validUntil <= validFrom, pourcentage\
+        \ hors 1 à 50, valeur <= 0 : 422. ADMIN."
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromoCodeRequest"
+        required: true
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "201":
+          description: Code créé (en-tête Location)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/promo-codes/check:
+    post:
+      tags:
+      - Codes promo
+      summary: Aperçu d'un code (client connecté)
+      description: "Calcule {code, discount, amountAfter} sans rien consommer, avec\
+        \ les mêmes contrôles que la réservation (404, 422, 403, 409). CLIENT."
+      operationId: check
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckRequest"
+        required: true
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Réduction calculée
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DiscountResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/loyalty/me/redeem:
+    post:
+      tags:
+      - Fidélité
+      summary: Convertir des points en bon
+      description: "Multiples de 100 ; 100 points = 10.000 TND. Crée un bon personnel\
+        \ LOY-XXXXXX (1 utilisation, 90 jours). Pas un multiple de 100 ou solde insuffisant\
+        \ : 422 (field points). CLIENT."
+      operationId: redeem
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedeemRequest"
+        required: true
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "201":
+          description: Bon créé
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/loyalty/accounts/{userId}/adjust:
+    post:
+      tags:
+      - Fidélité
+      summary: Ajuster les points d'un client
+      description: "Geste commercial (positif, compte dans le cumul) ou correction\
+        \ (négative, sans faire passer le solde sous 0 ; le niveau ne baisse jamais).\
+        \ Motif obligatoire. ADMIN."
+      operationId: adjust
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustRequest"
+        required: true
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "200":
+          description: Compte après ajustement
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /internal/loyalty/{userId}:
+    get:
+      tags:
+      - Interne
+      summary: "[Interne] Niveau et solde d'un client"
+      description: "{userId, tier, balance, status}. INTERNAL."
+      operationId: get
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Compte
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InternalLoyaltyResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /health:
+    get:
+      tags:
+      - Santé
+      summary: Vérifier que le service répond
+      description: "Route publique (sans token). Renvoie {\"status\":\"UP\"} (convention\
+        \ commune)."
+      operationId: health
+      responses:
+        "200":
+          description: Service démarré
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+      security: []
+  /api/loyalty/me:
+    get:
+      tags:
+      - Fidélité
+      summary: Mon compte
+      description: "Solde, cumul, niveau et points manquants pour le niveau suivant.\
+        \ CLIENT."
+      operationId: me
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: Compte du client connecté
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+  /api/loyalty/me/vouchers:
+    get:
+      tags:
+      - Fidélité
+      summary: Mes bons personnels non utilisés
+      description: "Actifs, non utilisés et non expirés. CLIENT."
+      operationId: myVouchers
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Liste des bons
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromoCodeResponse"
+  /api/loyalty/me/transactions:
+    get:
+      tags:
+      - Fidélité
+      summary: Mon historique de points
+      description: "Paginé, du plus récent au plus ancien. CLIENT."
+      operationId: myTransactions
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Page de l'historique
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseTransactionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/loyalty/accounts:
+    get:
+      tags:
+      - Fidélité
+      summary: Liste des comptes
+      description: "Filtre facultatif par niveau ; tri par cumul décroissant. AGENT,\
+        \ ADMIN."
+      operationId: accounts
+      parameters:
+      - name: tier
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - BRONZE
+          - SILVER
+          - GOLD
+      - name: page
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: Page de comptes
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/loyalty/accounts/{userId}:
+    get:
+      tags:
+      - Fidélité
+      summary: Détail d'un compte
+      description: "AGENT, ADMIN ou le client lui-même."
+      operationId: account
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Compte
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+components:
+  schemas:
+    PromoCodeUpdateRequest:
+      required:
+      - discountType
+      - discountValue
+      - validFrom
+      - validUntil
+      type: object
+      properties:
+        discountType:
+          type: string
+          example: PERCENT
+          enum:
+          - PERCENT
+          - AMOUNT
+        discountValue:
+          type: number
+          example: 15
+        minAmount:
+          type: number
+          example: 100.0
+        minTier:
+          type: string
+          example: SILVER
+          enum:
+          - BRONZE
+          - SILVER
+          - GOLD
+        validFrom:
+          type: string
+          format: date
+          example: 2026-12-01
+        validUntil:
+          type: string
+          format: date
+          example: 2027-03-31
+        maxUses:
+          type: integer
+          format: int32
+          example: 500
+        maxUsesPerUser:
+          type: integer
+          format: int32
+          example: 1
+        active:
+          type: boolean
+          description: Absent = true
+          example: true
+      description: Modification d'un code promo (active=false pour le désactiver)
+    PromoCodeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 0a76460c-0f85-475e-9744-e5d95b3f32b9
+        code:
+          type: string
+          example: BIENVENUE10
+        discountType:
+          type: string
+          enum:
+          - PERCENT
+          - AMOUNT
+        discountValue:
+          type: number
+          example: 10.0
+        minAmount:
+          type: number
+          example: 200.0
+        minTier:
+          type: string
+          enum:
+          - BRONZE
+          - SILVER
+          - GOLD
+        validFrom:
+          type: string
+          format: date
+          example: 2026-01-01
+        validUntil:
+          type: string
+          format: date
+          example: 2027-12-31
+        maxUses:
+          type: integer
+          format: int32
+          example: 100
+        maxUsesPerUser:
+          type: integer
+          format: int32
+          example: 1
+        usedCount:
+          type: integer
+          format: int32
+          example: 12
+        ownerUserId:
+          type: string
+          description: Renseigné pour un bon personnel LOY-XXXXXX
+          format: uuid
+        active:
+          type: boolean
+          example: true
+        state:
+          type: string
+          description: "VALID, UPCOMING, EXPIRED, EXHAUSTED ou INACTIVE (calculé)"
+          example: VALID
+        createdAt:
+          type: string
+          format: date-time
+      description: Code promo ou bon personnel
+    ValidateRequest:
+      required:
+      - amount
+      - code
+      - userId
+      type: object
+      properties:
+        code:
+          type: string
+          example: BIENVENUE10
+        userId:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        amount:
+          type: number
+          example: 450.0
+      description: Validation d'un code par reservation-service (rien n'est consommé)
+    DiscountResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: BIENVENUE10
+        amountBefore:
+          type: number
+          example: 450.0
+        discount:
+          type: number
+          example: 45.0
+        amountAfter:
+          type: number
+          example: 405.0
+      description: "Réduction calculée : le prix barré (amountBefore) puis le nouveau\
+        \ prix (amountAfter)"
+    ApplyRequest:
+      required:
+      - amount
+      - code
+      - reservationId
+      - userId
+      type: object
+      properties:
+        code:
+          type: string
+          example: BIENVENUE10
+        userId:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        reservationId:
+          type: string
+          format: uuid
+          example: 01cb68ad-4eec-4bdd-8971-ce35381c59d1
+        amount:
+          type: number
+          example: 270.0
+      description: Application d'un code à une réservation par reservation-service
+        (idempotent par reservationId)
+    UsageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: BIENVENUE10
+        promoCodeId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        amountBefore:
+          type: number
+          example: 270.0
+        discount:
+          type: number
+          example: 27.0
+        amountAfter:
+          type: number
+          example: 243.0
+        usedAt:
+          type: string
+          format: date-time
+      description: Utilisation d'un code promo sur une réservation
+    PromoCodeRequest:
+      required:
+      - code
+      - discountType
+      - discountValue
+      - validFrom
+      - validUntil
+      type: object
+      properties:
+        code:
+          type: string
+          description: "A-Z, 0-9 et tiret, 4 à 20 caractères (mis en majuscules)"
+          example: PRINTEMPS20
+        discountType:
+          type: string
+          example: PERCENT
+          enum:
+          - PERCENT
+          - AMOUNT
+        discountValue:
+          type: number
+          description: "PERCENT : 1 à 50 ; AMOUNT : montant en TND > 0"
+          example: 20
+        minAmount:
+          type: number
+          description: Montant minimum de la réservation (facultatif)
+          example: 100.0
+        minTier:
+          type: string
+          description: Niveau minimum (facultatif)
+          example: SILVER
+          enum:
+          - BRONZE
+          - SILVER
+          - GOLD
+        validFrom:
+          type: string
+          format: date
+          example: 2026-12-01
+        validUntil:
+          type: string
+          description: Inclus ; doit être après validFrom
+          format: date
+          example: 2027-03-31
+        maxUses:
+          type: integer
+          description: Nombre total d'utilisations (absent = illimité)
+          format: int32
+          example: 500
+        maxUsesPerUser:
+          type: integer
+          description: Utilisations par client (1 par défaut)
+          format: int32
+          example: 1
+      description: Création d'un code promo
+    CheckRequest:
+      required:
+      - amount
+      - code
+      type: object
+      properties:
+        code:
+          type: string
+          example: BIENVENUE10
+        amount:
+          type: number
+          example: 450.0
+      description: Aperçu d'un code pour le client connecté (rien n'est consommé)
+    RedeemRequest:
+      required:
+      - points
+      type: object
+      properties:
+        points:
+          type: integer
+          format: int32
+          example: 200
+      description: Conversion de points en bon personnel (multiples de 100 ; 100 points
+        = 10.000 TND)
+    AdjustRequest:
+      required:
+      - points
+      - reason
+      type: object
+      properties:
+        points:
+          type: integer
+          format: int32
+          example: 50
+        reason:
+          maxLength: 255
+          minLength: 0
+          type: string
+          example: "Geste commercial : retard de livraison du véhicule"
+      description: "Ajustement par un ADMIN : positif (geste commercial, compte dans\
+        \ le cumul) ou négatif (correction)"
+    AccountResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+          example: f4d1bab3-468d-428d-b02c-b44341430bfd
+        balance:
+          type: integer
+          description: Points disponibles
+          format: int32
+          example: 1240
+        lifetimePoints:
+          type: integer
+          description: Total gagné depuis l'ouverture (sert au niveau)
+          format: int32
+          example: 1640
+        tier:
+          type: string
+          enum:
+          - BRONZE
+          - SILVER
+          - GOLD
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - CLOSED
+        nextTier:
+          type: string
+          description: "Niveau suivant, null si GOLD"
+          enum:
+          - BRONZE
+          - SILVER
+          - GOLD
+        pointsToNextTier:
+          type: integer
+          description: Points de cumul manquants pour le niveau suivant (0 si GOLD)
+          format: int32
+          example: 0
+        progress:
+          type: number
+          description: "Progression vers le niveau suivant, de 0 à 1 (1 si GOLD)"
+          format: double
+          example: 0.15
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      description: "Compte de fidélité : solde, cumul, niveau et progression vers\
+        \ le niveau suivant"
+    InternalLoyaltyResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        tier:
+          type: string
+          enum:
+          - BRONZE
+          - SILVER
+          - GOLD
+        balance:
+          type: integer
+          format: int32
+          example: 1240
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - CLOSED
+      description: "Niveau et solde d'un client, pour les autres services"
+    PageResponsePromoCodeResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromoCodeResponse"
+        page:
+          type: integer
+          format: int32
+          example: 0
+        size:
+          type: integer
+          format: int32
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 57
+      description: Liste paginée
+    PageResponseTransactionResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionResponse"
+        page:
+          type: integer
+          format: int32
+          example: 0
+        size:
+          type: integer
+          format: int32
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 57
+      description: Liste paginée
+    TransactionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - WELCOME
+          - EARN
+          - REDEEM
+          - ADJUST
+        points:
+          type: integer
+          description: Positif (gain) ou négatif (dépense)
+          format: int32
+          example: 80
+        reason:
+          type: string
+          example: "Location terminée (640.000 TND, niveau SILVER)"
+        reservationId:
+          type: string
+          description: "Pour EARN : la réservation terminée"
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+      description: Ligne de l'historique des points
+    PageResponseAccountResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountResponse"
+        page:
+          type: integer
+          format: int32
+          example: 0
+        size:
+          type: integer
+          format: int32
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 57
+      description: Liste paginée
+  responses:
+    BadRequest:
+      description: "Requête invalide (JSON illisible, champ ou paramètre obligatoire\
+        \ manquant)"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 400
+            error: BAD_REQUEST
+            message: Champs obligatoires manquants
+            details:
+            - message: ne doit pas être vide
+              field: code
+    Unauthorized:
+      description: Token absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 401
+            error: UNAUTHORIZED
+            message: "Authentification requise : token Bearer absent ou invalide"
+            details: []
+    Forbidden:
+      description: "Rôle insuffisant, niveau insuffisant ou bon d'un autre client"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 403
+            error: FORBIDDEN
+            message: Ce code est réservé au niveau GOLD
+            details:
+            - message: Ce code est réservé au niveau GOLD
+              field: code
+    NotFound:
+      description: Objet introuvable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 404
+            error: NOT_FOUND
+            message: "Code promo introuvable : INCONNU"
+            details:
+            - message: "Code promo introuvable : INCONNU"
+              field: code
+    Conflict:
+      description: "Conflit métier (code épuisé, déjà utilisé, doublon)"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 409
+            error: CONFLICT
+            message: Ce code promo a atteint son nombre maximal d'utilisations
+            details:
+            - message: Ce code promo a atteint son nombre maximal d'utilisations
+              field: code
+    Unprocessable:
+      description: Règle métier ou format non respecté
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 422
+            error: UNPROCESSABLE_ENTITY
+            message: Ce code promo a expiré le 2026-09-30
+            details:
+            - message: Ce code promo a expiré le 2026-09-30
+              field: code
+    BadGateway:
+      description: Réponse illisible de user-service ou reservation-service
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 502
+            error: BAD_GATEWAY
+            message: Réponse illisible de user-service
+            details: []
+    ServiceUnavailable:
+      description: user-service ou reservation-service arrêté ou absent d'Eureka
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            status: 503
+            error: SERVICE_UNAVAILABLE
+            message: user-service est indisponible (arrêté ou absent d'Eureka)
+            details: []
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: Token Keycloak (realm location-voitures). Voir le README pour l'obtenir.
+      scheme: bearer
+      bearerFormat: JWT

@@ -1,0 +1,53 @@
+// Styles du module Fidélité (même base que features/users) (couleurs : variables de src/styles.scss).
+:host { display: block; }
+.page { padding: 24px 32px; max-width: 1100px; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+h1 { margin: 0; font-size: 24px; }
+h2 { margin: 0 0 12px; font-size: 17px; }
+.card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+input, select { font: inherit; color: #0f172a; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+input.ng-invalid.ng-touched, select.ng-invalid.ng-touched { border-color: #dc2626; }
+.check { flex-direction: row; align-items: center; gap: 8px; }
+.err { color: #dc2626; font-size: 12px; }
+.alert { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.ok { background: #f0fdfa; color: var(--primary-dark); border-color: #99f6e4; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+button, .btn { font: inherit; cursor: pointer; border-radius: 8px; padding: 7px 14px; border: 1px solid var(--border); background: #fff; color: #0f172a; text-decoration: none; }
+button.primary, .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+button.danger { color: #b91c1c; border-color: #fecaca; }
+button:disabled { opacity: .55; cursor: default; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #f1f5f9; }
+.badge.green { background: #dcfce7; color: #166534; }
+.badge.red { background: #fee2e2; color: #991b1b; }
+.badge.amber { background: #fef3c7; color: #92400e; }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pager { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 12px; }
+dl { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; margin: 0; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+
+// Niveaux de fidélité
+.tier-card { border-radius: 14px; padding: 20px 24px; color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.tier-card .big { font-size: 34px; font-weight: 700; line-height: 1.1; }
+.tier-card .label { opacity: .85; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; }
+.tier-BRONZE { background: linear-gradient(135deg, #b45309, #92400e); }
+.tier-SILVER { background: linear-gradient(135deg, #64748b, #334155); }
+.tier-GOLD { background: linear-gradient(135deg, #ca8a04, #a16207); }
+.badge.BRONZE { background: #fed7aa; color: #7c2d12; }
+.badge.SILVER { background: #e2e8f0; color: #1e293b; }
+.badge.GOLD { background: #fef08a; color: #713f12; }
+.gauge { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin: 8px 0 4px; }
+.gauge > div { height: 100%; background: var(--primary); transition: width .4s; }
+.plus { color: #166534; font-weight: 600; }
+.minus { color: #991b1b; font-weight: 600; }
+.voucher { border: 1px dashed var(--primary); border-radius: 10px; padding: 10px 14px; display: inline-flex; gap: 12px; align-items: center; margin: 0 8px 8px 0; }
+.voucher code { font-size: 15px; font-weight: 700; }
+.strike { text-decoration: line-through; color: var(--muted); margin-right: 8px; }
+.new-price { font-weight: 700; color: var(--primary-dark); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }

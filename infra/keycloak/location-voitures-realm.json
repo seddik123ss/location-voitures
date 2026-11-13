@@ -599,6 +599,20 @@
     "notBefore" : 0,
     "groups" : [ ]
   }, {
+    "id" : "13608d9d-1906-451c-8a8d-3526e395c05d",
+    "username" : "service-account-loyalty-service",
+    "emailVerified" : false,
+    "createdTimestamp" : 1794592571000,
+    "enabled" : true,
+    "totp" : false,
+    "serviceAccountClientId" : "loyalty-service",
+    "credentials" : [ ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-location-voitures", "INTERNAL" ],
+    "notBefore" : 0,
+    "groups" : [ ]
+  }, {
     "id" : "76111062-75aa-41e8-9f16-b660185a2195",
     "username" : "service-account-user-service",
     "emailVerified" : false,
@@ -1319,6 +1333,35 @@
         "jsonType.label" : "String"
       }
     } ],
+    "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "basic", "email" ],
+    "optionalClientScopes" : [ "address", "phone", "offline_access", "organization", "microprofile-jwt" ]
+  }, {
+    "id" : "308ca818-150d-4807-af92-d3b007d877c8",
+    "clientId" : "loyalty-service",
+    "surrogateAuthRequired" : false,
+    "enabled" : true,
+    "alwaysDisplayInConsole" : false,
+    "clientAuthenticatorType" : "client-secret",
+    "secret" : "JTaNb158hKOcDW35pTblPvzPTvbMsrgd",
+    "redirectUris" : [ ],
+    "webOrigins" : [ ],
+    "notBefore" : 0,
+    "bearerOnly" : false,
+    "consentRequired" : false,
+    "standardFlowEnabled" : false,
+    "implicitFlowEnabled" : false,
+    "directAccessGrantsEnabled" : false,
+    "serviceAccountsEnabled" : true,
+    "publicClient" : false,
+    "frontchannelLogout" : false,
+    "protocol" : "openid-connect",
+    "attributes" : {
+      "realm_client" : "false",
+      "client.secret.creation.time" : "1794592571"
+    },
+    "authenticationFlowBindingOverrides" : { },
+    "fullScopeAllowed" : true,
+    "nodeReRegistrationTimeout" : -1,
     "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "basic", "email" ],
     "optionalClientScopes" : [ "address", "phone", "offline_access", "organization", "microprofile-jwt" ]
   }, {

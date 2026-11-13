@@ -11,4 +11,7 @@ CREATE DATABASE complaint_db;
 CREATE USER 'complaint_svc'@'%' IDENTIFIED BY 'complaint_pwd';
 GRANT ALL PRIVILEGES ON complaint_db.* TO 'complaint_svc'@'%';
 GRANT ALL PRIVILEGES ON `complaint_db%`.* TO 'complaint_svc'@'%';
+CREATE DATABASE loyalty_db;
+CREATE USER 'loyalty_svc'@'%' IDENTIFIED BY 'loyalty_pwd';
+GRANT ALL PRIVILEGES ON loyalty_db.* TO 'loyalty_svc'@'%';
 FLUSH PRIVILEGES;

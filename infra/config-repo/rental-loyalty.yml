@@ -1,0 +1,7 @@
+# Configuration NON secrete de loyalty-service (lue par GET http://localhost:8888/rental-loyalty/default). Aucun secret : ils restent dans le .env du service.
+service:
+  port: 8108
+  eureka-name: RENTAL-LOYALTY
+rabbitmq:
+  consumes: [loyalty.user_events, loyalty.reservation_completed]
+  publishes: []

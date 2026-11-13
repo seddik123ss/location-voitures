@@ -1,0 +1,87 @@
+# Les valeurs viennent du fichier .env du service (non commité, voir .env.example).
+# Les valeurs après ":" sont les valeurs par défaut si la variable est absente.
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: RENTAL-LOYALTY
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/loyalty_db}
+    username: ${DB_USERNAME:loyalty_svc}
+    password: ${DB_PASSWORD:loyalty_pwd}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate          # le schéma est géré par Flyway, Hibernate vérifie seulement
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        type:
+          preferred_uuid_jdbc_type: CHAR        # UUID stockés en CHAR(36)
+          preferred_instant_jdbc_type: TIMESTAMP
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    time-zone: UTC
+    default-property-inclusion: always
+    serialization:
+      write-dates-as-timestamps: false
+  rabbitmq:
+    addresses: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672}
+    listener:
+      simple:
+        acknowledge-mode: manual    # ack seulement après le commit en base
+        prefetch: 1                 # un message à la fois
+        default-requeue-rejected: false
+  security:
+    oauth2:
+      # Validation des tokens reçus (Keycloak, rôles dans la claim "roles").
+      # L'émetteur reste localhost:8180 ; dans Docker, les clés et le token se récupèrent par keycloak:8080
+      # (KEYCLOAK_JWKS, KEYCLOAK_TOKEN_URL). Sans ces variables (mvnw spring-boot:run), on part de KEYCLOAK_ISSUER.
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/location-voitures}
+          jwk-set-uri: ${KEYCLOAK_JWKS:${KEYCLOAK_ISSUER:http://localhost:8180/realms/location-voitures}/protocol/openid-connect/certs}
+      # Token du compte de service loyalty-service (rôle INTERNAL) pour appeler user-service et reservation-service
+      client:
+        registration:
+          keycloak:
+            client-id: ${KEYCLOAK_CLIENT_ID:loyalty-service}
+            client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${KEYCLOAK_TOKEN_URL:${KEYCLOAK_ISSUER:http://localhost:8180/realms/location-voitures}/protocol/openid-connect/token}
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+            logger-level: basic
+
+server:
+  port: ${SERVICE_PORT:8108}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    hostname: ${SERVICE_HOST:host.docker.internal}   # docs/conventions.md : jamais d'IP détectée
+    prefer-ip-address: false
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+logging:
+  level:
+    com.location.loyaltyservice.remote: DEBUG

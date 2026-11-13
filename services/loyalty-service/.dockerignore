@@ -1,0 +1,18 @@
+# Reconstruit dans l'image
+target/
+
+# Configuration locale et secrets : les variables viennent de docker-compose
+.env
+
+# Inutile pour compiler l'image (les tests tournent avec mvnw, pas dans le build Docker)
+.mvn/
+mvnw
+mvnw.cmd
+.git
+.gitignore
+.gitattributes
+Dockerfile
+.dockerignore
+*.md
+.idea/
+.vscode/

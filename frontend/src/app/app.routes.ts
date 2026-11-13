@@ -10,5 +10,6 @@ export const routes: Routes = [
   { path: 'complaints', canActivate: [roleGuard('CLIENT', 'AGENT', 'ADMIN')], loadChildren: () => import('./features/complaints/complaints.routes').then((m) => m.COMPLAINTS_ROUTES) },
   { path: 'users', canActivate: [roleGuard('CLIENT', 'AGENT', 'ADMIN')], loadChildren: () => import('./features/users/users.routes').then((m) => m.USERS_ROUTES) },
   { path: 'ml', canActivate: [roleGuard('ADMIN')], loadChildren: () => import('./features/ml/ml.routes').then((m) => m.ML_ROUTES) },
+  { path: 'loyalty', canActivate: [roleGuard('CLIENT', 'AGENT', 'ADMIN')], loadChildren: () => import('./features/loyalty/loyalty.routes').then((m) => m.LOYALTY_ROUTES) },
   { path: '**', redirectTo: 'vehicles' },
 ];
