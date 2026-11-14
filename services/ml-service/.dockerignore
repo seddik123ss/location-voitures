@@ -1,0 +1,25 @@
+# Configuration locale et secrets : les variables viennent de docker-compose
+.env
+
+# Environnement virtuel et caches locaux (les dépendances sont installées dans l'image)
+.venv/
+venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Inutile pour faire tourner le service
+notebooks/
+scripts/
+tests/
+pytest.ini
+.git
+.gitignore
+Dockerfile
+.dockerignore
+*.md
+.idea/
+.vscode/

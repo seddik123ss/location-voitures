@@ -1,0 +1,19 @@
+# Reconstruits dans l'image
+node_modules/
+.next/
+*.tsbuildinfo
+
+# Configuration locale et secrets : les variables viennent de docker-compose
+.env
+
+# Inutile dans l'image
+tests/
+requests.http
+AGENTS.md
+.git
+.gitignore
+Dockerfile
+.dockerignore
+*.md
+.idea/
+.vscode/

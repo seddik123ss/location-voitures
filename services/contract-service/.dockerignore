@@ -1,0 +1,18 @@
+# Reconstruits dans l'image
+**/bin/
+**/obj/
+
+# Configuration locale et secrets : les variables viennent de docker-compose
+.env
+
+# Inutile dans l'image
+tests/
+.config/
+*.sln
+.git
+.gitignore
+Dockerfile
+.dockerignore
+*.md
+.idea/
+.vscode/

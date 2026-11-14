@@ -34,6 +34,43 @@ x-reservation-env: &reservation-env
   RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
   LOOKUP_MODE: ${RESERVATION_LOOKUP_MODE:-demo}
 
+# Variables communes aux conteneurs de payment-service (profil "services").
+x-payment-env: &payment-env
+  SERVICE_PORT: "8104"
+  SERVICE_HOST: host.docker.internal
+  DB_URL: postgres://payment_svc:payment_pwd@postgres:5432/payment_db
+  EUREKA_URL: http://eureka:8761/eureka
+  CONFIG_SERVER_URL: http://config-server:8888   # configuration non secrète (infra/config-repo)
+  # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
+  KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+  KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+  KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
+  KEYCLOAK_CLIENT_ID: payment-service
+  KEYCLOAK_CLIENT_SECRET: ${PAYMENT_KEYCLOAK_CLIENT_SECRET:-}
+  RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+  DJANGO_SECRET_KEY: ${PAYMENT_DJANGO_SECRET_KEY:-change-me-dev-only}
+  DJANGO_DEBUG: "false"
+  AUTH_MODE: jwt
+  EVENT_PUBLISHER: ${PAYMENT_EVENT_PUBLISHER:-log}
+  RESERVATION_CLIENT: ${PAYMENT_RESERVATION_CLIENT:-fake}
+
+# Variables communes aux conteneurs de vehicle-service (profil "services").
+x-vehicle-env: &vehicle-env
+  SERVICE_PORT: "8102"
+  SERVICE_HOST: host.docker.internal
+  DB_URL: mysql://vehicle_svc:vehicle_pwd@mysql:3306/vehicle_db
+  SHADOW_DB_URL: mysql://vehicle_svc:vehicle_pwd@mysql:3306/vehicle_shadow
+  EUREKA_URL: http://eureka:8761/eureka
+  CONFIG_SERVER_URL: http://config-server:8888   # configuration non secrète (infra/config-repo)
+  # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
+  KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+  KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+  KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
+  KEYCLOAK_CLIENT_ID: vehicle-service
+  KEYCLOAK_CLIENT_SECRET: ${VEHICLE_KEYCLOAK_CLIENT_SECRET:-}
+  RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+  RESERVATION_MOCK: ${VEHICLE_RESERVATION_MOCK:-true}
+
 services:
   mysql:
     image: mysql:8.4
@@ -206,6 +243,117 @@ services:
     depends_on:
       reservation-service:
         condition: service_healthy
+    stop_grace_period: 15s
+
+  # docker compose --profile services up -d --build payment-service payment-consumer
+  # Une image, deux conteneurs : API (migrations puis gunicorn, inscription RENTAL-PAYMENT), consommateur RabbitMQ.
+  payment-service:
+    profiles: [services]
+    build: ../services/payment-service
+    image: location-voitures/payment-service
+    ports: ["8104:8104"]
+    environment: *payment-env
+    depends_on: [postgres, eureka, keycloak, rabbitmq]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8104/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 15s
+  payment-consumer:
+    profiles: [services]
+    image: location-voitures/payment-service
+    command: ["python", "manage.py", "consume_events"]
+    environment: *payment-env
+    depends_on:
+      payment-service:
+        condition: service_healthy
+    # RabbitMQ peut être encore en démarrage au premier lancement : on relance le consommateur s'il échoue.
+    restart: on-failure
+    stop_grace_period: 15s
+
+  # docker compose --profile services up -d --build vehicle-service vehicle-consumer
+  # Une image, deux conteneurs : API Next.js (migrations Prisma, inscription RENTAL-VEHICLE), consommateur RabbitMQ.
+  vehicle-service:
+    profiles: [services]
+    build:
+      context: ../services/vehicle-service
+      additional_contexts:
+        docs: ../docs   # contrat docs/openapi/vehicle-service.yaml servi par /openapi.yaml
+    image: location-voitures/vehicle-service
+    ports: ["8102:8102"]
+    environment: *vehicle-env
+    depends_on: [mysql, eureka, keycloak, rabbitmq]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8102/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 15s
+  vehicle-consumer:
+    profiles: [services]
+    image: location-voitures/vehicle-service
+    command: ["./node_modules/.bin/tsx", "consumer/index.ts"]
+    environment: *vehicle-env
+    depends_on:
+      vehicle-service:
+        condition: service_healthy
+    restart: on-failure
+    stop_grace_period: 15s
+
+  # docker compose --profile services up -d --build contract-service
+  # API + inscription RENTAL-CONTRACT (Steeltoe) + consommateur RabbitMQ dans le même processus ; migrations au démarrage.
+  contract-service:
+    profiles: [services]
+    build: ../services/contract-service
+    image: location-voitures/contract-service
+    ports: ["8105:8105"]
+    environment:
+      SERVICE_PORT: "8105"
+      SERVICE_HOST: host.docker.internal
+      DB_URL: Host=postgres;Port=5432;Database=contract_db;Username=contract_svc;Password=contract_pwd
+      EUREKA_URL: http://eureka:8761/eureka
+      CONFIG_SERVER_URL: http://config-server:8888   # configuration non secrète (infra/config-repo)
+      # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+      KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/token
+      KEYCLOAK_CLIENT_ID: contract-service
+      KEYCLOAK_CLIENT_SECRET: ${CONTRACT_KEYCLOAK_CLIENT_SECRET:-}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      USE_FAKE_SERVICES: ${CONTRACT_USE_FAKE_SERVICES:-true}
+    depends_on: [postgres, eureka, keycloak, rabbitmq]
+    # PostgreSQL peut être encore en démarrage au premier lancement : on relance le service s'il échoue.
+    restart: on-failure
+    stop_grace_period: 15s
+
+  # docker compose --profile services up -d --build ml-service
+  # API + inscription RENTAL-ML + consommateur RabbitMQ (ml.reservation_completed) ; alembic upgrade head au démarrage.
+  ml-service:
+    profiles: [services]
+    build: ../services/ml-service
+    image: location-voitures/ml-service
+    ports: ["8107:8107"]
+    environment:
+      SERVICE_PORT: "8107"
+      SERVICE_HOST: host.docker.internal
+      DB_URL: postgresql+psycopg://ml_svc:ml_pwd@postgres:5432/ml_db
+      EUREKA_URL: http://eureka:8761/eureka
+      EUREKA_ENABLED: "true"
+      CONFIG_SERVER_URL: http://config-server:8888   # configuration non secrète (infra/config-repo)
+      # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
+      KEYCLOAK_CLIENT_ID: ml-service
+      KEYCLOAK_CLIENT_SECRET: ${ML_KEYCLOAK_CLIENT_SECRET:-}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_ENABLED: "true"
+    volumes:
+      # Modèles entraînés partagés avec le lancement local (la base ml_db référence ces fichiers)
+      - ../services/ml-service/artifacts:/app/artifacts
+    depends_on: [postgres, eureka, keycloak, rabbitmq]
     stop_grace_period: 15s
 volumes:
   mysql-data: {}

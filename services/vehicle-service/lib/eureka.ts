@@ -47,6 +47,8 @@ export function startEureka() {
   // Désinscription à l'arrêt (Ctrl + C)
   const stop = () => {
     console.log("[eureka] désinscription…");
+    // Eureka injoignable : on quitte quand même au bout de 5 s
+    setTimeout(() => process.exit(0), 5000).unref();
     client?.stop(() => process.exit(0));
   };
   process.once("SIGINT", stop);

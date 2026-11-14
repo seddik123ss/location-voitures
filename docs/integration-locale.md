@@ -75,6 +75,33 @@ Les `.env` ne sont **jamais** commités (vérifier avec `git check-ignore -v <fi
 **Remise à zéro des données de démo** (services arrêtés, infra lancée) : `.\scripts\stop-all.ps1 ; .\scripts\reset-demo.ps1 ; .\scripts\start-all.ps1`.
 Le script remet vehicle, reservation, complaint, payment, recrée `contract_db`, nettoie `ml_db`, vide les files et contrôle les quantités.
 
+### Variante : les 8 services dans Docker (profil `services`)
+
+Chaque service a un `Dockerfile` ; `infra/docker-compose.yml` les déclare sous le profil `services` (un simple
+`docker compose up -d` ne lance toujours que l'infra). Secrets et modes : `infra/.env` (voir `infra/.env.example`).
+```powershell
+cd infra
+docker compose --profile services up -d --build              # tout
+docker compose --profile services up -d --build payment-service payment-consumer   # un seul service
+docker compose --profile services stop payment-service payment-consumer            # retour au lancement local
+```
+
+| Service | Conteneurs | Démarrage |
+|---|---|---|
+| user, loyalty | `user-service`, `loyalty-service` | Flyway puis Spring Boot |
+| vehicle | `vehicle-service`, `vehicle-consumer` | `prisma migrate deploy` puis `next start` |
+| reservation | `reservation-service`, `reservation-eureka`, `reservation-consumer` | migrations puis `php -S` |
+| payment | `payment-service`, `payment-consumer` | `migrate` puis gunicorn (1 worker) |
+| contract | `contract-service` | migrations EF Core au démarrage |
+| complaint | `complaint-service`, `complaint-eureka` | migrations puis `php -S` |
+| ml | `ml-service` (modèles : `services/ml-service/artifacts` monté) | `alembic upgrade head` puis uvicorn |
+
+Les conteneurs s'annoncent dans Eureka sous `host.docker.internal` (port publié), comme en local : on peut mélanger
+services locaux et conteneurs. **Jamais les deux à la fois pour un même service** (même port, double inscription).
+Dans un conteneur, l'émetteur des tokens reste `localhost:8180` mais Keycloak se joint par `keycloak:8080` :
+`KEYCLOAK_JWKS` (ou `KEYCLOAK_JWKS_URL`) et `KEYCLOAK_TOKEN_URL` le disent à chaque service. `docker stop` retire
+l'instance d'Eureka (cache de lecture d'Eureka et de la Gateway : jusqu'à ~30 s).
+
 ## 5. Config Server (port 8888)
 
 `infra/config-server` (Spring Cloud Config, profil native) sert `infra/config-repo` et s'inscrit sous CONFIG-SERVER.

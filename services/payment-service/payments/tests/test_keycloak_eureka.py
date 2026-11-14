@@ -162,6 +162,7 @@ class EurekaRegistrationTests(SimpleTestCase):
             (["manage.py", "runserver", "--noreload"], {}, True),
             (["manage.py", "migrate"], {"RUN_MAIN": "true"}, False),
             (["manage.py", "consume_events"], {}, False),
+            (["/usr/local/bin/gunicorn", "config.wsgi"], {}, True),  # Docker image
         ]
         for argv, env, expected in cases:
             with self.subTest(argv=argv, env=env), mock.patch("sys.argv", argv), \
@@ -169,6 +170,20 @@ class EurekaRegistrationTests(SimpleTestCase):
                 if "RUN_MAIN" not in env:
                     __import__("os").environ.pop("RUN_MAIN", None)
                 self.assertEqual(eureka._serves_http(), expected)
+
+    @override_settings(EUREKA_URL="http://eureka:8761/eureka/", SERVICE_NAME="RENTAL-PAYMENT",
+                       SERVICE_HOST="host.docker.internal", SERVICE_PORT=8104)
+    def test_stop_sends_the_eureka_delete(self):
+        # Synchronous REST call: the client's own stop() is a coroutine that cannot run at exit time.
+        from payments import eureka
+        with mock.patch.object(eureka, "_client", mock.Mock()), \
+                mock.patch("payments.eureka.urllib.request.urlopen") as urlopen:
+            eureka.stop()
+            self.assertIsNone(eureka._client)
+        request = urlopen.call_args.args[0]
+        self.assertEqual((request.get_method(), request.full_url),
+                         ("DELETE", "http://eureka:8761/eureka/apps/RENTAL-PAYMENT/"
+                                    "host.docker.internal%3Arental-payment%3A8104"))
 
     @override_settings(SERVICE_HOST="host.docker.internal", SERVICE_PORT=8104)
     def test_announces_host_docker_internal_never_an_ip(self):

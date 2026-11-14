@@ -30,7 +30,9 @@ async function getServiceToken(): Promise<string> {
 
   let res: Response;
   try {
-    res = await fetch(`${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`, {
+    // KEYCLOAK_TOKEN_URL : dans Docker, Keycloak se joint par keycloak:8080 (l'émetteur reste localhost:8180)
+    const tokenUrl = process.env.KEYCLOAK_TOKEN_URL || `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`;
+    res = await fetch(tokenUrl, {
       method: "POST",
       body: new URLSearchParams({
         grant_type: "client_credentials",

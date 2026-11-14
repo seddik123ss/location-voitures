@@ -10,6 +10,12 @@ public class KeycloakOptions
     public string Issuer { get; set; } = "http://localhost:8180/realms/location-voitures";
     public string ClientId { get; set; } = "contract-service";
     public string ClientSecret { get; set; } = string.Empty;
+
+    /// <summary>Vide = &lt;Issuer&gt;/protocol/openid-connect/token. Dans Docker : keycloak:8080 (l'émetteur reste localhost:8180).</summary>
+    public string TokenUrl { get; set; } = string.Empty;
+
+    public string EffectiveTokenUrl =>
+        string.IsNullOrEmpty(TokenUrl) ? $"{Issuer.TrimEnd('/')}/protocol/openid-connect/token" : TokenUrl;
 }
 
 /// <summary>
@@ -48,7 +54,7 @@ public class ServiceTokenProvider
             HttpResponseMessage response;
             try
             {
-                response = await _http.PostAsync($"{_options.Issuer.TrimEnd('/')}/protocol/openid-connect/token", form, ct);
+                response = await _http.PostAsync(_options.EffectiveTokenUrl, form, ct);
             }
             catch (HttpRequestException)
             {

@@ -97,7 +97,7 @@ class ServiceTokenProvider:
 
     @property
     def token_url(self) -> str:
-        return f"{settings.KEYCLOAK_ISSUER}/protocol/openid-connect/token"
+        return settings.KEYCLOAK_TOKEN_URL  # default: <KEYCLOAK_ISSUER>/protocol/openid-connect/token
 
     def __call__(self) -> str:
         with self._lock:

@@ -4,8 +4,9 @@ import { errorResponse } from "./http";
 
 const issuer = process.env.KEYCLOAK_ISSUER ?? "http://localhost:8180/realms/location-voitures";
 
-// Clés publiques du realm (mises en cache par jose)
-const JWKS = createRemoteJWKSet(new URL(`${issuer}/protocol/openid-connect/certs`));
+// Clés publiques du realm (mises en cache par jose). KEYCLOAK_JWKS : dans Docker, l'émetteur reste localhost:8180
+// mais Keycloak se joint par keycloak:8080 (infra/docker-compose.yml).
+const JWKS = createRemoteJWKSet(new URL(process.env.KEYCLOAK_JWKS || `${issuer}/protocol/openid-connect/certs`));
 
 const unauthorized = (message: string) => new ApiError(errorResponse(401, "UNAUTHORIZED", message));
 const forbidden = (message: string) => new ApiError(errorResponse(403, "FORBIDDEN", message));

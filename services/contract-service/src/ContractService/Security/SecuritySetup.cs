@@ -3,6 +3,9 @@ using System.Text.Json;
 using ContractService.Errors;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -28,13 +31,21 @@ public static class SecuritySetup
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    /// <summary>JWT Keycloak : Authority = émetteur, MapInboundClaims = false, rôles dans "roles".</summary>
-    public static IServiceCollection AddKeycloakJwt(this IServiceCollection services, string issuer)
+    /// <summary>
+    /// JWT Keycloak : Authority = émetteur, MapInboundClaims = false, rôles dans "roles".
+    /// jwksUrl (KEYCLOAK_JWKS, Docker) : clés lues directement à cette adresse (keycloak:8080), car la découverte
+    /// OpenID de l'émetteur localhost:8180 n'est pas joignable depuis un conteneur. L'émetteur vérifié ne change pas.
+    /// </summary>
+    public static IServiceCollection AddKeycloakJwt(this IServiceCollection services, string issuer, string? jwksUrl = null)
     {
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(o =>
             {
-                o.Authority = issuer;
+                if (string.IsNullOrEmpty(jwksUrl))
+                    o.Authority = issuer;
+                else
+                    o.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+                        jwksUrl, new JwksConfigurationRetriever(issuer), new HttpDocumentRetriever { RequireHttps = false });
                 o.RequireHttpsMetadata = false;
                 o.MapInboundClaims = false;
                 o.TokenValidationParameters.ValidIssuer = issuer;
@@ -73,6 +84,24 @@ public static class SecuritySetup
     /// <summary>Vrai si l'utilisateur est seulement CLIENT (il ne voit que ses propres contrats).</summary>
     public static bool IsClientOnly(this ClaimsPrincipal user) =>
         !user.IsInRole(Roles.Agent) && !user.IsInRole(Roles.Admin);
+}
+
+/// <summary>Configuration OpenID construite à partir du seul JWKS (clés de signature) et de l'émetteur attendu.</summary>
+public class JwksConfigurationRetriever : IConfigurationRetriever<OpenIdConnectConfiguration>
+{
+    private readonly string _issuer;
+
+    public JwksConfigurationRetriever(string issuer) => _issuer = issuer;
+
+    public async Task<OpenIdConnectConfiguration> GetConfigurationAsync(
+        string address, IDocumentRetriever retriever, CancellationToken cancel)
+    {
+        var keys = new JsonWebKeySet(await retriever.GetDocumentAsync(address, cancel));
+        var configuration = new OpenIdConnectConfiguration { Issuer = _issuer, JwksUri = address };
+        foreach (var key in keys.GetSigningKeys())
+            configuration.SigningKeys.Add(key);
+        return configuration;
+    }
 }
 
 /// <summary>Swagger : bouton "Authorize" (token Bearer) et réponses 401/403 sur les routes protégées.</summary>

@@ -32,6 +32,9 @@ var env = new Dictionary<string, string?>
     ["Keycloak:Issuer"] = Environment.GetEnvironmentVariable("KEYCLOAK_ISSUER"),
     ["Keycloak:ClientId"] = Environment.GetEnvironmentVariable("KEYCLOAK_CLIENT_ID"),
     ["Keycloak:ClientSecret"] = Environment.GetEnvironmentVariable("KEYCLOAK_CLIENT_SECRET"),
+    // Docker : Keycloak se joint par keycloak:8080, l'émetteur des tokens reste localhost:8180
+    ["Keycloak:TokenUrl"] = Environment.GetEnvironmentVariable("KEYCLOAK_TOKEN_URL"),
+    ["Keycloak:JwksUrl"] = Environment.GetEnvironmentVariable("KEYCLOAK_JWKS"),
     ["RabbitMq:Url"] = Environment.GetEnvironmentVariable("RABBITMQ_URL"),
     ["RemoteServices:UseFakes"] = Environment.GetEnvironmentVariable("USE_FAKE_SERVICES"),
 };
@@ -94,7 +97,7 @@ builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("Ra
 builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
 
 // Sécurité : JWT Keycloak, rôles dans la claim "roles"
-builder.Services.AddKeycloakJwt(builder.Configuration["Keycloak:Issuer"]!);
+builder.Services.AddKeycloakJwt(builder.Configuration["Keycloak:Issuer"]!, builder.Configuration["Keycloak:JwksUrl"]);
 
 // Règles métier
 builder.Services.Configure<FeeOptions>(builder.Configuration.GetSection("Fees"));

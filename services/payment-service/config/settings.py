@@ -196,6 +196,8 @@ EUREKA_URL = os.getenv("EUREKA_URL", "http://localhost:8761/eureka")
 EUREKA_ENABLED = env_bool("EUREKA_ENABLED", True) and not TESTING
 KEYCLOAK_ISSUER = os.getenv("KEYCLOAK_ISSUER", "http://localhost:8180/realms/location-voitures")
 KEYCLOAK_JWKS_URL = os.getenv("KEYCLOAK_JWKS_URL", f"{KEYCLOAK_ISSUER}/protocol/openid-connect/certs")
+# In Docker the issuer stays localhost:8180 (KC_HOSTNAME) but Keycloak is reached at keycloak:8080.
+KEYCLOAK_TOKEN_URL = os.getenv("KEYCLOAK_TOKEN_URL", f"{KEYCLOAK_ISSUER}/protocol/openid-connect/token")
 KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "payment-service")
 KEYCLOAK_CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET", "")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")

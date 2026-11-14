@@ -4,7 +4,8 @@ Eureka registration and discovery (py-eureka-client), started from PaymentsConfi
 - Registration: app RENTAL-PAYMENT, announced as SERVICE_HOST (host.docker.internal, per
   docs/conventions.md: never an auto-detected IP), port SERVICE_PORT, health check /health.
   Only the process that actually serves HTTP registers: `runserver` (the autoreloader's
-  child process, RUN_MAIN=true, or --noreload). migrate, test, shell, the RabbitMQ consumer... do not.
+  child process, RUN_MAIN=true, or --noreload) or gunicorn (Docker image, one worker).
+  migrate, test, shell, the RabbitMQ consumer... do not.
 - Discovery: any process can resolve another service; a discovery-only client is created
   lazily when needed (should_register=False).
 If Eureka is down at startup, the service still starts (error logged); calls to other
@@ -15,6 +16,8 @@ import logging
 import os
 import sys
 import threading
+import urllib.parse
+import urllib.request
 
 from django.conf import settings
 from py_eureka_client import eureka_client
@@ -27,6 +30,8 @@ _lock = threading.Lock()
 
 def _serves_http() -> bool:
     argv = sys.argv
+    if argv and os.path.basename(argv[0]).startswith("gunicorn"):
+        return True  # Docker image: gunicorn with a single worker (see Dockerfile)
     if len(argv) < 2 or argv[1] != "runserver":
         return False
     return os.environ.get("RUN_MAIN") == "true" or "--noreload" in argv
@@ -69,14 +74,21 @@ def start() -> None:
 
 
 def stop() -> None:
-    """Unregister on shutdown so the Gateway stops routing here immediately."""
+    """Unregister on shutdown so the Gateway stops routing here immediately.
+
+    Plain Eureka REST call (DELETE /apps/{app}/{instanceId}), synchronous: at exit time the
+    client's own stop() (a coroutine run through an executor) can no longer be scheduled.
+    """
     global _client
     with _lock:
         if _client is not None:
+            url = "{}/apps/{}/{}".format(settings.EUREKA_URL.rstrip("/"), settings.SERVICE_NAME,
+                                         urllib.parse.quote(_instance_kwargs()["instance_id"], safe=""))
             try:
-                _client.stop()
-            except Exception:  # noqa: BLE001
-                pass
+                urllib.request.urlopen(urllib.request.Request(url, method="DELETE"), timeout=3).close()
+                logger.info("Unregistered from Eureka (%s)", settings.SERVICE_NAME)
+            except Exception as exc:  # noqa: BLE001 - Eureka will expire the lease
+                logger.warning("Eureka unregistration failed: %s", exc)
             _client = None
 
 
