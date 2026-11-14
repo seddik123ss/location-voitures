@@ -1,0 +1,237 @@
+# Intégration continue : à chaque push et pull request, les tests de chaque service (jobs en parallèle),
+# le build + tests du frontend, puis la construction de toutes les images Docker.
+# Bases de test : conteneurs de service GitHub (PostgreSQL 16, MySQL 8.4), comme infra/docker-compose.yml.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------- Spring Boot : user, loyalty (H2 en mémoire) et la Gateway ----------
+  java:
+    name: ${{ matrix.name }} (Maven)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: user-service, dir: services/user-service }
+          - { name: loyalty-service, dir: services/loyalty-service }
+          - { name: api-gateway, dir: infra/api-gateway }
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: mvn -B -ntp test
+
+  # ---------- payment-service (Django) : PostgreSQL ----------
+  payment:
+    name: payment-service (Django)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: services/payment-service
+    env:
+      # Django crée lui-même la base test_payment_db
+      DB_URL: postgres://postgres:postgres@localhost:5432/payment_db
+      CONFIG_SERVER_URL: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/payment-service/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python manage.py test payments
+
+  # ---------- ml-service (FastAPI) : PostgreSQL, base ml_test_db ----------
+  ml:
+    name: ml-service (FastAPI)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: services/ml-service
+    env:
+      TEST_DB_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ml_test_db
+      EUREKA_ENABLED: "false"
+      RABBITMQ_ENABLED: "false"
+      CONFIG_SERVER_URL: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/ml-service/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ml_test_db"
+      - run: python -m pytest
+
+  # ---------- contract-service (ASP.NET Core) : base EF Core en mémoire ----------
+  contract:
+    name: contract-service (.NET)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/contract-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet test --verbosity minimal
+
+  # ---------- vehicle-service (Next.js, Prisma) : MySQL (test du consommateur sur vehicle_db) ----------
+  vehicle:
+    name: vehicle-service (Next.js)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot" --health-interval 5s --health-timeout 5s --health-retries 30
+    defaults:
+      run:
+        working-directory: services/vehicle-service
+    env:
+      DB_URL: mysql://vehicle_svc:vehicle_pwd@127.0.0.1:3306/vehicle_db
+      SHADOW_DB_URL: mysql://vehicle_svc:vehicle_pwd@127.0.0.1:3306/vehicle_db
+      CONFIG_SERVER_URL: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/vehicle-service/package-lock.json
+      - name: Bases et comptes MySQL (infra/mysql/init.sql)
+        working-directory: .
+        run: mysql -h 127.0.0.1 -uroot -proot < infra/mysql/init.sql
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run seed
+      - name: Vérification des types
+        run: npx tsc --noEmit -p .
+      - run: npx vitest run
+
+  # ---------- reservation-service (Laravel) : SQLite en mémoire ----------
+  reservation:
+    name: reservation-service (Laravel)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/reservation-service
+    env:
+      CONFIG_SERVER_URL: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, intl, bcmath, sockets, curl, zip, pdo_sqlite, sqlite3, pdo_mysql
+          tools: composer:v2
+          coverage: none
+      - run: cp .env.example .env
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      - run: php artisan key:generate
+      - run: php artisan test
+
+  # ---------- complaint-service (Symfony) : MySQL, base complaint_db_test ----------
+  complaint:
+    name: complaint-service (Symfony)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot" --health-interval 5s --health-timeout 5s --health-retries 30
+    defaults:
+      run:
+        working-directory: services/complaint-service
+    env:
+      CONFIG_SERVER_URL: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, intl, curl, zip, pdo_mysql, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Bases et comptes MySQL (infra/mysql/init.sql)
+        working-directory: .
+        run: mysql -h 127.0.0.1 -uroot -proot < infra/mysql/init.sql
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      # Recrée complaint_db_test (migrations + fixtures), puis toute la suite PHPUnit
+      - run: composer test
+
+  # ---------- frontend (Angular) ----------
+  frontend:
+    name: frontend (Angular)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx ng test --watch=false
+
+  # ---------- Images Docker : infra (Eureka, Gateway, Config Server) + les 8 services ----------
+  docker:
+    name: images Docker
+    runs-on: ubuntu-latest
+    needs: [java, payment, ml, contract, vehicle, reservation, complaint, frontend]
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fichier .env de l'infra (valeurs de dev de .env.example)
+        run: cp .env.example .env
+      - run: docker compose --profile services build
