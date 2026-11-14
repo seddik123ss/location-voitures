@@ -67,7 +67,9 @@ if ($missingEnv) { Stop-WithError ("Fichiers de configuration manquants : {0} (a
 # ---------- 1. Infrastructure (MySQL, Postgres, RabbitMQ, Keycloak, Eureka, Gateway, Config Server) ----------
 if (-not $SkipInfra) {
     Write-Host "[infra] docker compose up -d" -ForegroundColor Yellow
-    Push-Location (Join-Path $Repository "infra"); docker compose up -d; Pop-Location
+    # docker compose ecrit sa progression sur stderr : via cmd (2>&1), PowerShell 5.1 n'y voit pas une erreur.
+    Push-Location (Join-Path $Repository "infra"); cmd /c "docker compose up -d 2>&1"; $composeExit = $LASTEXITCODE; Pop-Location
+    if ($composeExit -ne 0) { Stop-WithError "docker compose up -d a echoue (code $composeExit) : voir les messages ci-dessus." }
 }
 Wait-Url "Keycloak (realm)" "http://localhost:8180/realms/location-voitures" 180 | Out-Null
 Wait-Url "Eureka" "http://localhost:8761/" 120 | Out-Null
@@ -99,8 +101,10 @@ Start-ServiceGroup "payment-service" 8104 {
 Start-ServiceGroup "contract-service" 8105 { Open-Window "contract-service :8105" "services\contract-service\src\ContractService" "dotnet run" }
 
 # ---------- 6. complaint (serveur + Eureka) ----------
+# composer serve demande la Symfony CLI ; sans elle, serveur integre de PHP (composer serve:php, meme port).
+$complaintServe = if (Get-Command symfony -ErrorAction SilentlyContinue) { "composer serve" } else { "composer serve:php" }
 Start-ServiceGroup "complaint-service" 8106 {
-    Open-Window "complaint-service :8106" "services\complaint-service" "composer serve" -Php
+    Open-Window "complaint-service :8106" "services\complaint-service" $complaintServe -Php
     Open-Window "complaint-eureka" "services\complaint-service" "composer eureka" -Php
 }
 
