@@ -19,6 +19,7 @@ final class EurekaRegistry implements ServiceRegistry
             (int) config('eureka.port'),
             // Passé explicitement : la valeur du .env n'est pas visible par getenv(), que le client lit par défaut.
             (string) config('eureka.host'),
+            (string) config('eureka.status_page', '/health'),
         ));
     }
 

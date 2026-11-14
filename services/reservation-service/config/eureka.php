@@ -9,6 +9,8 @@ return [
     'app' => 'RENTAL-RESERVATION',
     'host' => env('SERVICE_HOST', 'host.docker.internal'),
     'port' => (int) env('SERVICE_PORT', 8103),
+    // Lien du tableau de bord Eureka : Swagger UI (l5-swagger).
+    'status_page' => '/api/doc',
     // Secondes entre deux battements (Eureka retire une instance sans battement après 90 s).
     'heartbeat_interval' => 30,
 ];

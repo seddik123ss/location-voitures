@@ -14,7 +14,8 @@ final class EurekaClient
         private string $eurekaUrl,   // ex. http://localhost:8761/eureka
         private string $app,         // ex. RENTAL-COMPLAINT
         private int $port,           // ex. 8106
-        ?string $host = null         // nom annoncé aux autres ; par défaut SERVICE_HOST, sinon host.docker.internal
+        ?string $host = null,        // nom annoncé aux autres ; par défaut SERVICE_HOST, sinon host.docker.internal
+        private string $statusPagePath = '/health'   // lien du tableau de bord Eureka (ex. /api/doc pour Swagger UI)
     ) {
         $this->app = strtoupper($this->app);
         $this->host = $host ?? (getenv('SERVICE_HOST') ?: 'host.docker.internal');
@@ -38,7 +39,7 @@ final class EurekaClient
             'vipAddress' => strtolower($this->app),
             'secureVipAddress' => strtolower($this->app),
             'homePageUrl' => "$base/",
-            'statusPageUrl' => "$base/health",
+            'statusPageUrl' => $base . $this->statusPagePath,
             'healthCheckUrl' => "$base/health",
             'dataCenterInfo' => [
                 '@class' => 'com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo',

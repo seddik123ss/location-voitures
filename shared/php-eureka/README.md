@@ -31,6 +31,9 @@ EurekaRunner::run(
 
 Laravel (`php artisan eureka:run`) : même code avec `'RENTAL-RESERVATION'` et `$this->info($m)`.
 
+Paramètres facultatifs : `$host` (nom annoncé, par défaut `SERVICE_HOST`) et `$statusPagePath` (lien affiché dans le tableau
+de bord Eureka, `/health` par défaut ; complaint et reservation passent `/api/doc` pour ouvrir leur Swagger UI).
+
 ## Appeler un autre service
 
 ```php

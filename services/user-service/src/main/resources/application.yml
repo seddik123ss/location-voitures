@@ -72,6 +72,7 @@ eureka:
   instance:
     hostname: ${SERVICE_HOST:${service.host:host.docker.internal}}   # docs/conventions.md : jamais d'IP détectée
     prefer-ip-address: false
+    status-page-url-path: /swagger-ui.html   # lien du tableau de bord Eureka : Swagger UI
 
 app:
   reservations:

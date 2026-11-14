@@ -43,6 +43,7 @@ services:
             $app: 'RENTAL-COMPLAINT'
             $port: '%env(int:SERVICE_PORT)%'
             $host: '%env(SERVICE_HOST)%'
+            $statusPagePath: '/api/doc'   # lien du tableau de bord Eureka : Swagger UI
 
     # Réservations et contrats : implémentation HTTP (Eureka) ou simulée, selon LOOKUP_MODE.
     App\Integration\ReservationLookup:

@@ -23,7 +23,7 @@ export function startEureka() {
       port: { $: port, "@enabled": true },
       vipAddress: "RENTAL-VEHICLE",
       homePageUrl: `${base}/`,
-      statusPageUrl: `${base}/health`,
+      statusPageUrl: `${base}/docs`, // lien du tableau de bord Eureka : Swagger UI
       healthCheckUrl: `${base}/health`,
       dataCenterInfo: {
         "@class": "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo",

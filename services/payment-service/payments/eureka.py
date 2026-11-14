@@ -42,7 +42,7 @@ def _instance_kwargs() -> dict:
         instance_ip=host,  # explicit: no IP auto-detection
         instance_port=port,
         home_page_url=f"{base}/swagger",
-        status_page_url=f"{base}/health",
+        status_page_url=f"{base}/swagger",  # link in the Eureka dashboard: Swagger UI
         health_check_url=f"{base}/health",
         renewal_interval_in_secs=10,
         duration_in_secs=30,
