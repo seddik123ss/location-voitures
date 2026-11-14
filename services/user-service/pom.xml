@@ -65,6 +65,11 @@
       <groupId>org.springframework.cloud</groupId>
       <artifactId>spring-cloud-starter-openfeign</artifactId>
     </dependency>
+    <!-- Config Server (infra/config-server) : configuration non secrète lue au démarrage -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-config</artifactId>
+    </dependency>
 
     <!-- Sécurité Keycloak : validation des tokens (resource server)
          + token de compte de service pour les appels /internal (client credentials) -->

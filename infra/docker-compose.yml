@@ -4,6 +4,7 @@ name: location-voitures
 x-complaint-env: &complaint-env
   DATABASE_URL: mysql://complaint_svc:complaint_pwd@mysql:3306/complaint_db?serverVersion=8.4&charset=utf8mb4
   EUREKA_URL: http://eureka:8761/eureka
+  CONFIG_SERVER_URL: http://config-server:8888   # configuration non secrète (infra/config-repo)
   SERVICE_HOST: host.docker.internal
   SERVICE_PORT: "8106"
   # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
@@ -21,6 +22,7 @@ x-reservation-env: &reservation-env
   DB_CONNECTION: mysql
   DB_URL: mysql://reservation_svc:reservation_pwd@mysql:3306/reservation_db
   EUREKA_URL: http://eureka:8761/eureka
+  CONFIG_SERVER_URL: http://config-server:8888   # configuration non secrète (infra/config-repo)
   SERVICE_HOST: host.docker.internal
   SERVICE_PORT: "8103"
   # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
@@ -129,6 +131,7 @@ services:
       DB_USERNAME: user_svc
       DB_PASSWORD: user_pwd
       EUREKA_URL: http://eureka:8761/eureka
+      CONFIG_SERVER_URL: http://config-server:8888   # configuration non secrète (infra/config-repo)
       # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
       KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
       KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs
@@ -155,6 +158,7 @@ services:
       DB_USERNAME: loyalty_svc
       DB_PASSWORD: loyalty_pwd
       EUREKA_URL: http://eureka:8761/eureka
+      CONFIG_SERVER_URL: http://config-server:8888   # configuration non secrète (infra/config-repo)
       # L'émetteur des tokens reste localhost:8180 (KC_HOSTNAME) ; le conteneur joint Keycloak par keycloak:8080.
       KEYCLOAK_ISSUER: http://localhost:8180/realms/location-voitures
       KEYCLOAK_JWKS: http://keycloak:8080/realms/location-voitures/protocol/openid-connect/certs

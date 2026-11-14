@@ -2,7 +2,9 @@
 # Les valeurs après ":" sont les valeurs par défaut si la variable est absente.
 spring:
   config:
-    import: optional:file:.env[.properties]
+    # 1) .env du service (secrets) ; 2) Config Server (infra/config-repo : rental-user.yml + application.yml).
+    # "optional:" : Config Server arrêté -> avertissement et démarrage avec les valeurs par défaut ci-dessous.
+    import: optional:file:.env[.properties], optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
   application:
     name: RENTAL-USER
   datasource:
@@ -35,8 +37,8 @@ spring:
       # (KEYCLOAK_JWKS, KEYCLOAK_TOKEN_URL). Sans ces variables (mvnw spring-boot:run), on part de KEYCLOAK_ISSUER.
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/location-voitures}
-          jwk-set-uri: ${KEYCLOAK_JWKS:${KEYCLOAK_ISSUER:http://localhost:8180/realms/location-voitures}/protocol/openid-connect/certs}
+          issuer-uri: ${KEYCLOAK_ISSUER:${keycloak.issuer:http://localhost:8180/realms/location-voitures}}
+          jwk-set-uri: ${KEYCLOAK_JWKS:${KEYCLOAK_ISSUER:${keycloak.issuer:http://localhost:8180/realms/location-voitures}}/protocol/openid-connect/certs}
       # Token du compte de service user-service (rôle INTERNAL) pour appeler les autres services
       client:
         registration:
@@ -46,8 +48,12 @@ spring:
             authorization-grant-type: client_credentials
         provider:
           keycloak:
-            token-uri: ${KEYCLOAK_TOKEN_URL:${KEYCLOAK_ISSUER:http://localhost:8180/realms/location-voitures}/protocol/openid-connect/token}
+            token-uri: ${KEYCLOAK_TOKEN_URL:${KEYCLOAK_ISSUER:${keycloak.issuer:http://localhost:8180/realms/location-voitures}}/protocol/openid-connect/token}
   cloud:
+    config:
+      name: rental-user               # fichier lu dans infra/config-repo (Config Server)
+      request-connect-timeout: 3000
+      request-read-timeout: 3000
     openfeign:
       client:
         config:
@@ -57,14 +63,14 @@ spring:
             logger-level: basic
 
 server:
-  port: ${SERVICE_PORT:8101}
+  port: ${SERVICE_PORT:${service.port:8101}}
 
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+      defaultZone: ${EUREKA_URL:${eureka.url:http://localhost:8761/eureka}}
   instance:
-    hostname: ${SERVICE_HOST:host.docker.internal}   # docs/conventions.md : jamais d'IP détectée
+    hostname: ${SERVICE_HOST:${service.host:host.docker.internal}}   # docs/conventions.md : jamais d'IP détectée
     prefer-ip-address: false
 
 app:

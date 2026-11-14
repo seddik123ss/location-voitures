@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { requireRoles } from "../lib/auth";
 import { ApiError } from "../lib/api";
 
-const TOKEN_URL = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`;
+const TOKEN_URL = `${process.env.KEYCLOAK_ISSUER ?? "http://localhost:8180/realms/location-voitures"}/protocol/openid-connect/token`;
 
 async function getToken(body: Record<string, string>) {
   const res = await fetch(TOKEN_URL, { method: "POST", body: new URLSearchParams(body) });

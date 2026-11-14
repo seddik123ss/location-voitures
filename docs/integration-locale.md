@@ -79,8 +79,22 @@ Le script remet vehicle, reservation, complaint, payment, recrée `contract_db`,
 
 `infra/config-server` (Spring Cloud Config, profil native) sert `infra/config-repo` et s'inscrit sous CONFIG-SERVER.
 Exemple : http://localhost:8888/rental-ml/default. Aucun secret dans `config-repo` (ils restent dans les `.env`).
-ml-service le lit au démarrage si `CONFIG_SERVER_URL` est défini (`.env` prioritaire ; Config Server arrêté : avertissement et démarrage normal).
-Les fichiers des 6 autres services sont dans la PR `feature/config-repo-all-services`.
+**Les 8 services** lisent au démarrage `SERVICE_PORT`, `SERVICE_HOST`, `EUREKA_URL` et `KEYCLOAK_ISSUER` dans
+`rental-<service>.yml` + `application.yml` (`CONFIG_SERVER_URL`, `http://localhost:8888` par défaut, `http://config-server:8888` dans Docker).
+Priorité : variable d'environnement ou `.env` > Config Server > valeur par défaut du code ; ces 4 clés sont donc commentées dans les
+`.env.example` (les décommenter pour forcer une valeur locale). Config Server arrêté : avertissement et démarrage avec les valeurs par défaut.
+
+| Service | Client du Config Server |
+|---|---|
+| user, loyalty (Spring Boot) | `spring-cloud-starter-config` : `spring.config.import: optional:configserver:` |
+| payment (Django) | `payments/config_server.py`, appelé dans `config/settings.py` |
+| reservation (Laravel) | `app/Support/ConfigServer.php`, après le chargement du `.env` (`bootstrap/app.php`), cache 60 s |
+| complaint (Symfony) | `src/Config/ConfigServerEnvVarLoader.php` (`EnvVarLoaderInterface`), cache 60 s |
+| vehicle (Next.js) | `lib/config-server.ts`, appelé dans `instrumentation.ts` et `consumer/index.ts` |
+| contract (ASP.NET Core) | `ConfigServerEnv.cs`, appelé au début de `Program.cs` |
+| ml (FastAPI) | `app/config_server.py` (premier service branché) |
+
+Démo : changer une valeur dans `infra/config-repo/rental-<service>.yml`, relancer le service, la voir dans son journal (`[config] ...`).
 
 ## 6. Inscription (sign up) Keycloak
 

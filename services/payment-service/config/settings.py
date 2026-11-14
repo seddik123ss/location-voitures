@@ -18,6 +18,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load services/payment-service/.env if present (never committed).
 load_dotenv(BASE_DIR / ".env")
 
+# `manage.py test`: deterministic configuration, independent of .env and of Docker
+# (dev headers auth, simulated reservation client, logged events, no Eureka, no Config Server).
+TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
+
+# Config Server (infra/config-server, file infra/config-repo/rental-payment.yml): fills SERVICE_PORT, SERVICE_HOST,
+# EUREKA_URL and KEYCLOAK_ISSUER when neither the environment nor .env sets them. Never secrets.
+# Priority: environment / .env  >  Config Server  >  defaults below. CONFIG_SERVER_URL= (empty) disables it.
+CONFIG_SERVER_URL = "" if TESTING else os.getenv("CONFIG_SERVER_URL", "http://localhost:8888")
+if CONFIG_SERVER_URL:
+    from payments.config_server import apply_to_environment, config_url
+
+    _from_config_server = apply_to_environment(CONFIG_SERVER_URL)
+    if _from_config_server and os.environ.get("RUN_MAIN") != "true":   # once, not again in the autoreloader child
+        print(f"[config] {config_url(CONFIG_SERVER_URL)} -> {', '.join(sorted(_from_config_server))}", file=sys.stderr)
+
 
 def env_bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
@@ -31,10 +46,6 @@ SERVICE_NAME = "RENTAL-PAYMENT"
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8104"))
 # Name announced in Eureka (docs/conventions.md): reachable from Windows and from containers.
 SERVICE_HOST = os.getenv("SERVICE_HOST", "host.docker.internal")
-
-# `manage.py test`: deterministic configuration, independent of .env and of Docker
-# (dev headers auth, simulated reservation client, logged events, no Eureka).
-TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
 
 INSTALLED_APPS = [
     "django.contrib.admin",

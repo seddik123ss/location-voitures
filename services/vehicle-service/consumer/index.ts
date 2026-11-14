@@ -1,12 +1,15 @@
 import amqp, { type ConsumeMessage } from "amqplib";
 import { prisma } from "../lib/prisma";
 import { handleEvent, PermanentError } from "../lib/contract-events";
+import { loadConfigServer } from "../lib/config-server";
 
 const QUEUE = "vehicle.contract_events";
 const DLQ = `${QUEUE}.dlq`;
 const RABBITMQ_URL = process.env.RABBITMQ_URL ?? "amqp://guest:guest@localhost:5672";
 
 async function main() {
+  // Config Server (EUREKA_URL, KEYCLOAK_ISSUER... absents du .env) avant les appels à reservation-service
+  await loadConfigServer();
   const conn = await amqp.connect(RABBITMQ_URL);
   const ch = await conn.createChannel();
 

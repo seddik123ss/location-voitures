@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
+using ContractService;
 using ContractService.Clients;
 using ContractService.Data;
 using ContractService.Errors;
@@ -16,6 +17,10 @@ DotEnv.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 var isTesting = builder.Environment.IsEnvironment("Testing");
+
+// Config Server (infra/config-repo/rental-contract.yml) : SERVICE_PORT, SERVICE_HOST, EUREKA_URL, KEYCLOAK_ISSUER
+// s'ils ne sont ni dans l'environnement ni dans le .env (jamais pendant les tests).
+if (!isTesting) ConfigServerEnv.Load();
 
 // Variables d'environnement de l'équipe (docs/conventions.md) -> configuration
 var port = Environment.GetEnvironmentVariable("SERVICE_PORT") ?? "8105";
