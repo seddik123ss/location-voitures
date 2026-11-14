@@ -143,12 +143,28 @@ jobs:
       - name: Bases et comptes MySQL (infra/mysql/init.sql)
         working-directory: .
         run: mysql -h 127.0.0.1 -uroot -proot < infra/mysql/init.sql
+      # tests/auth.test.ts demande de vrais tokens : Keycloak avec le realm du projet, comme infra/docker-compose.yml
+      - name: Keycloak (realm location-voitures), démarré pendant l'installation
+        working-directory: .
+        run: >-
+          docker run -d --name keycloak -p 8180:8080
+          -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin -e KC_HOSTNAME=http://localhost:8180
+          -v "$PWD/infra/keycloak:/opt/keycloak/data/import:ro"
+          quay.io/keycloak/keycloak:26.0 start-dev --import-realm
       - run: npm ci
       - run: npx prisma generate
       - run: npx prisma migrate deploy
       - run: npm run seed
       - name: Vérification des types
         run: npx tsc --noEmit -p .
+      - name: Attente de Keycloak
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8180/realms/location-voitures > /dev/null && exit 0
+            sleep 3
+          done
+          docker logs keycloak | tail -40
+          exit 1
       - run: npx vitest run
 
   # ---------- reservation-service (Laravel) : SQLite en mémoire ----------
