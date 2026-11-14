@@ -19,6 +19,9 @@ public class SecurityConfig {
             .authorizeExchange(ex -> ex
                 .pathMatchers(HttpMethod.OPTIONS).permitAll()
                 .pathMatchers("/actuator/health").permitAll()
+                // Swagger UI centralisé et contrats OpenAPI (DocsRoutes) : publics, les appels /api restent protégés
+                .pathMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**", "/webjars/**",
+                        "/v3/api-docs/**", "/docs/**").permitAll()
                 .pathMatchers(HttpMethod.GET, "/api/vehicles/**", "/api/categories/**", "/api/agencies/**").permitAll()
                 .pathMatchers("/internal/**").denyAll()
                 .anyExchange().authenticated())

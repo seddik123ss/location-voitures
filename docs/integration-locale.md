@@ -102,6 +102,13 @@ Dans un conteneur, l'émetteur des tokens reste `localhost:8180` mais Keycloak s
 `KEYCLOAK_JWKS` (ou `KEYCLOAK_JWKS_URL`) et `KEYCLOAK_TOKEN_URL` le disent à chaque service. `docker stop` retire
 l'instance d'Eureka (cache de lecture d'Eureka et de la Gateway : jusqu'à ~30 s).
 
+### Documentation des API : une seule page
+
+**http://localhost:8088/swagger-ui.html** (Gateway, springdoc) : liste déroulante des 8 services. La Gateway lit le
+contrat de chaque service via Eureka (`GET /docs/<service>`, `infra/api-gateway/.../DocsRoutes.java`) et l'adapte :
+serveur = la Gateway (« Try it out » passe par elle : bouton **Authorize**, coller un token Keycloak), routes
+`/internal/**` et `/health` retirées (non exposées). Les pages Swagger de chaque service restent disponibles sur leur port.
+
 ## 5. Config Server (port 8888)
 
 `infra/config-server` (Spring Cloud Config, profil native) sert `infra/config-repo` et s'inscrit sous CONFIG-SERVER.

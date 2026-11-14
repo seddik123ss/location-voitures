@@ -42,6 +42,20 @@ spring:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/location-voitures}
           jwk-set-uri: ${KEYCLOAK_JWKS:http://localhost:8180/realms/location-voitures/protocol/openid-connect/certs}
+# Swagger UI centralisé : http://localhost:8088/swagger-ui.html, un contrat par service (routes /docs/*, DocsRoutes.java)
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls-primary-name: payment-service
+    urls:
+      - { name: user-service, url: /docs/user }
+      - { name: vehicle-service, url: /docs/vehicle }
+      - { name: reservation-service, url: /docs/reservation }
+      - { name: payment-service, url: /docs/payment }
+      - { name: contract-service, url: /docs/contract }
+      - { name: complaint-service, url: /docs/complaint }
+      - { name: ml-service, url: /docs/ml }
+      - { name: loyalty-service, url: /docs/loyalty }
 eureka:
   client:
     service-url:
